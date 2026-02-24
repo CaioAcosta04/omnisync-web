@@ -1,0 +1,40 @@
+# Dependencies
+node_modules
+
+# Build
+dist
+dist-ssr
+*.tsbuildinfo
+
+# Environment (nunca commitar secrets)
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Test / coverage
+coverage
+*.lcov
+
+# Editor / IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+.cursor
+
+# OS
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
