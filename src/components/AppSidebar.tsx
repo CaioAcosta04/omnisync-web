@@ -1,27 +1,20 @@
+import type { ReactNode } from 'react'
 import { Sidebar, Menu, MenuItem } from 'react-pro-sidebar'
-import {
-  FiLayers,
-  FiArchive,
-  FiGlobe,
-  FiShoppingCart,
-  FiHome,
-  FiUsers,
-  FiSettings,
-} from 'react-icons/fi'
 import logo from '../assets/omni_logo.png'
 import userExample from '../assets/user_example.png'
 
-const menuItems = [
-  { label: 'Dashboard', icon: <FiLayers size={20} />, active: true },
-  { label: 'Stock', icon: <FiArchive size={20} /> },
-  { label: 'Marketplaces', icon: <FiGlobe size={20} /> },
-  { label: 'Orders', icon: <FiShoppingCart size={20} /> },
-  { label: 'Stores', icon: <FiHome size={20} /> },
-  { label: 'Users', icon: <FiUsers size={20} /> },
-  { label: 'Settings', icon: <FiSettings size={20} /> },
-]
+type SidebarItem = {
+  label: string
+  icon: ReactNode
+}
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  items: SidebarItem[]
+  activeLabel: string
+  onSelect: (label: string) => void
+}
+
+export function AppSidebar({ items, activeLabel, onSelect }: AppSidebarProps) {
   return (
     <Sidebar
       rootStyles={sidebarStyles.sidebar}
@@ -36,13 +29,17 @@ export function AppSidebar() {
           </div>
         </div>
 
-        <Menu menuItemStyles={sidebarStyles.menuItemStyles} rootStyles={sidebarStyles.menu}>
-          {menuItems.map((item) => (
+        <Menu
+          menuItemStyles={sidebarStyles.menuItemStyles}
+          rootStyles={sidebarStyles.menu}
+        >
+          {items.map((item) => (
             <MenuItem
               key={item.label}
               icon={item.icon}
-              active={item.active}
-              style={item.active ? sidebarStyles.activeItem : undefined}
+              active={item.label === activeLabel}
+              onClick={() => onSelect(item.label)}
+              style={item.label === activeLabel ? sidebarStyles.activeItem : undefined}
             >
               {item.label}
             </MenuItem>
