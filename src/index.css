@@ -6,4 +6,15 @@
 
 body {
   min-height: 100vh;
+  font-family: "Montserrat Variable", "Montserrat", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+}
+
+/* Sidebar: item ativo (Dashboard) – fundo e texto roxo */
+.ps-menuitem-root.ps-active .ps-menu-button {
+  background-color: #ede9fe !important;
+  color: #6d28d9 !important;
+}
+.ps-menuitem-root.ps-active .ps-menu-icon {
+  color: #6d28d9 !important;
 }

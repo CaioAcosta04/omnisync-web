@@ -5,6 +5,7 @@ node_modules
 dist
 dist-ssr
 *.tsbuildinfo
+package-lock.json
 
 # Environment (nunca commitar secrets)
 .env

@@ -1,25 +1,26 @@
-import logo from './assets/omni_logo.jpeg'
+import { AppSidebar } from './components/AppSidebar'
 
 function App() {
   return (
-    <div style={styles.container}>
-      <img src={logo} alt="Logo" style={styles.logo} />
+    <div style={styles.layout}>
+      <AppSidebar />
+      <main style={styles.main}>
+        {/* Conteúdo da página */}
+      </main>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
 
 const styles = {
-  container: {
+  layout: {
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
     minHeight: '100vh',
   },
-  logo: {
-    maxWidth: '280px',
-    width: '100%',
-    height: 'auto',
+  main: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    minHeight: '100vh',
   },
-} as const;
+} as const
