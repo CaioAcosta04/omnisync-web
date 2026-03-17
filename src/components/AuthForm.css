@@ -1,0 +1,54 @@
+.form{
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    border: 1px solid black;
+    width: min(90%, 700px);
+    padding: 70px;
+    background-color: white;
+    margin: 0 auto;
+    border-radius: 5px;
+}
+
+.form h1{
+    font-size: 50px;
+}
+
+.create-account p{
+    font-size: 13px;
+}
+
+.create-account input{
+    padding: 10px;
+    border-radius: 5px;
+    width: 100%;
+}
+
+.create-account button{
+    background-color: #6467F2;
+    font-size: 17px;
+    padding: 15px;
+    color: white;
+    border-radius: 5px;
+}
+
+.auth-field {
+  position: relative;
+}
+
+.auth-field-icon {
+  position: absolute;
+  left: 10px;
+  top: 70%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.auth-field input {
+  padding-left: 40px;
+}
+
+.field-desc {
+  display: block;
+  font-size: 12px;
+}

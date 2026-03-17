@@ -7,6 +7,7 @@ import {
   FiHome,
   FiUsers,
   FiSettings,
+  FiLogIn,
 } from 'react-icons/fi'
 import { AppSidebar } from './components/AppSidebar'
 import {
@@ -18,6 +19,7 @@ import {
   StoresScreen,
   UsersScreen,
 } from './screens'
+import { UserCreateAccount } from './screens/user/userCreateAccount/UserCreateAccount'
 
 function App() {
   const items = useMemo(
@@ -29,6 +31,7 @@ function App() {
       { label: 'Stores', icon: <FiHome size={20} />, Screen: StoresScreen },
       { label: 'Users', icon: <FiUsers size={20} />, Screen: UsersScreen },
       { label: 'Settings', icon: <FiSettings size={20} />, Screen: SettingsScreen },
+      { label: 'CreateAccount', icon: <FiLogIn size={20} />, Screen: UserCreateAccount },
     ],
     []
   )
@@ -37,15 +40,17 @@ function App() {
 
   return (
     <div style={styles.layout}>
-      <div style={styles.sidebarShell}>
-        <AppSidebar
-          items={items}
-          activeLabel={activeLabel}
-          onSelect={setActiveLabel}
-        />
-      </div>
+      <AppSidebar
+        items={items}
+        activeLabel={activeLabel}
+        onSelect={setActiveLabel}
+      />
       <main style={styles.main}>
-        {activeItem ? <activeItem.Screen /> : null}
+        {activeItem ? (
+          <div style={styles.screenTitle}>
+            <activeItem.Screen />
+          </div>
+        ) : null}
       </main>
     </div>
   )
@@ -56,24 +61,19 @@ export default App
 const styles = {
   layout: {
     display: 'flex',
-    height: '100vh',
-    overflow: 'hidden',
-  },
-  /** Mantém a coluna da sidebar no viewport; o scroll fica só no `main`. */
-  sidebarShell: {
-    flexShrink: 0,
-    height: '100%',
-    overflow: 'hidden',
+    minHeight: '100vh',
   },
   main: {
     flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#ffffff',
+    minHeight: '100vh',
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    justifyContent: 'flex-start',
-    overflow: 'auto',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  screenTitle: {
+    fontSize: '32px',
+    fontWeight: 700,
+    color: '#111827',
   },
 } as const

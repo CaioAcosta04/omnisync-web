@@ -4,14 +4,8 @@
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-}
-
 body {
-  overflow: hidden;
+  min-height: 100vh;
   font-family: "Montserrat Variable", "Montserrat", system-ui, -apple-system,
     "Segoe UI", sans-serif;
 }
