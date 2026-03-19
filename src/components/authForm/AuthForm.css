@@ -1,0 +1,44 @@
+.form{
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(100%, 700px);
+  padding: 70px 70px 0px 70px;
+  background-color: white;
+  margin: 0 auto;
+}
+
+.form h1{
+  font-size: 50px;
+}
+
+.create-account p{
+  font-size: 13px;
+}
+
+.create-account input{
+  padding: 10px;
+  border-radius: 5px;
+  width: 100%;
+}
+
+.auth-field {
+  position: relative;
+}
+
+.auth-field-icon {
+  position: absolute;
+  left: 10px;
+  top: 70%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.auth-field input {
+  padding-left: 40px;
+}
+
+.field-desc {
+  display: block;
+  font-size: 12px;
+}

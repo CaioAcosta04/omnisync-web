@@ -1,5 +1,7 @@
 import { AiOutlineIdcard, AiFillLock, AiOutlineMail, AiOutlineUser } from "react-icons/ai";
-import { AuthForm } from "../../../components/AuthForm";
+import { FcGoogle } from "react-icons/fc";
+import { FaApple } from "react-icons/fa";
+import { AuthForm } from "../../../components/authForm/AuthForm";
 import './UserCreateAccount.css'
 import { BsBuildings } from "react-icons/bs";
 
@@ -16,6 +18,14 @@ export function UserCreateAccount() {
         console.log('Dados:', data)
     }
 
+    const handleGoogleSignIn = () => {
+        // redirecione para o backend de OAuth do Google aqui
+    }
+
+    const handleAppleSignIn = () => {
+        // redirecione para o backend de OAuth da Apple aqui
+    }
+
     return (
         <div className="create-account">
             <AuthForm
@@ -25,7 +35,19 @@ export function UserCreateAccount() {
                 submitLabel="Criar Conta"
                 onSubmit={handleSubmit}
             />
-            <a href="../userLogin/UserLogin">Já tem uma conta? Faça login</a>
+            <div className="content">
+                <p>Ou entre com</p>
+                <div className="social-login-row">
+                    <button type="button" className="social-login google-login" onClick={handleGoogleSignIn}>
+                        <FcGoogle size={20} />
+                        Google
+                    </button>
+                    <button type="button" className="social-login apple-login" onClick={handleAppleSignIn}>
+                        <FaApple size={20} />
+                        Apple
+                    </button>
+                </div>
+            </div>
         </div>
     )
 }
