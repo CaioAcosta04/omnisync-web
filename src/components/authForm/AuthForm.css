@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  width: min(100%, 700px);
-  padding: 70px 70px 0px 70px;
+  width: 100%;
+  padding: 30px 70px 0px 70px;
   background-color: white;
   margin: 0 auto;
 }
@@ -12,11 +12,29 @@
   font-size: 50px;
 }
 
-.create-account p{
+.submit-button {
+  background-color: #6467F2;
+  font-size: 17px;
+  padding: 12px;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+}
+
+.form-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Traz o checkbox para bem perto do botão */
+  width: 100%;
+}
+
+.form p{
   font-size: 13px;
 }
 
-.create-account input{
+.form input{
   padding: 10px;
   border-radius: 5px;
   width: 100%;
@@ -36,6 +54,26 @@
 
 .auth-field input {
   padding-left: 40px;
+  padding-right: 36px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 70%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: #000000;
+  font-size: inherit;
+}
+
+button .password-toggle {
+  background-color: white;
 }
 
 .field-desc {

@@ -1,4 +1,4 @@
-.create-account{
+.login-account{
     border: 1px solid black;
     border-radius: 5px;
     width: 50%;
@@ -9,7 +9,7 @@
 }
 
 
-.create-content{
+.login-content{
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -17,9 +17,45 @@
     padding: 0 70px 0 70px;
 }
 
-.create-content p{
+.login-content p{
     font-size: 13px;
-    margin: 30px 0 15px 0;
+}
+
+.save-login{
+    display: flex;
+    align-items: center;
+}
+
+.save-login p{
+    margin-left: 10px;
+    font-size: 13px;
+    color: #4b5563;
+}
+
+.save-login button {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    background-color: white;
+    border: 2px solid #000000;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease;
+}
+
+.save-login button.active {
+    background-color: #000000;
+}
+
+.save-login button.active::after {
+    content: '✓';
+    color: white;
+    font-size: 12px;
+    line-height: 1;
 }
 
 .divider {
