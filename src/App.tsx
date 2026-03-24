@@ -37,17 +37,15 @@ function App() {
 
   return (
     <div style={styles.layout}>
-      <AppSidebar
-        items={items}
-        activeLabel={activeLabel}
-        onSelect={setActiveLabel}
-      />
+      <div style={styles.sidebarShell}>
+        <AppSidebar
+          items={items}
+          activeLabel={activeLabel}
+          onSelect={setActiveLabel}
+        />
+      </div>
       <main style={styles.main}>
-        {activeItem ? (
-          <div style={styles.screenTitle}>
-            <activeItem.Screen />
-          </div>
-        ) : null}
+        {activeItem ? <activeItem.Screen /> : null}
       </main>
     </div>
   )
@@ -58,19 +56,24 @@ export default App
 const styles = {
   layout: {
     display: 'flex',
-    minHeight: '100vh',
+    height: '100vh',
+    overflow: 'hidden',
+  },
+  /** Mantém a coluna da sidebar no viewport; o scroll fica só no `main`. */
+  sidebarShell: {
+    flexShrink: 0,
+    height: '100%',
+    overflow: 'hidden',
   },
   main: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    minHeight: '100vh',
+    minWidth: 0,
+    minHeight: 0,
+    backgroundColor: '#f9fafb',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  screenTitle: {
-    fontSize: '32px',
-    fontWeight: 700,
-    color: '#111827',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    overflow: 'auto',
   },
 } as const
