@@ -17,18 +17,28 @@ interface AuthFormProps {
     submitLabel: string
     onSubmit: (data: Record<string, string>) => void
     children?: ReactNode
+    /** Conteúdo à direita na linha do rótulo do campo senha (ex.: “Esqueceu a senha?”). */
+    passwordLabelEnd?: ReactNode
 }
 
 interface PasswordFieldProps {
     field: Field
+    labelEnd?: ReactNode
 }
 
-function PasswordField({ field }: PasswordFieldProps) {
+function PasswordField({ field, labelEnd }: PasswordFieldProps) {
     const [visible, setVisible] = useState(false)
 
     return (
-        <div key={field.name} className="field-row">
-            <p className="field-desc">{field.inputDescription}</p>
+        <div className="field-row">
+            {labelEnd ? (
+                <div className="field-label-row">
+                    <p className="field-desc">{field.inputDescription}</p>
+                    {labelEnd}
+                </div>
+            ) : (
+                <p className="field-desc">{field.inputDescription}</p>
+            )}
             <label className="auth-field" htmlFor={field.name}>
                 <span className="auth-field-icon">{field.icon}</span>
                 <input
@@ -50,7 +60,15 @@ function PasswordField({ field }: PasswordFieldProps) {
     )
 }
 
-export function AuthForm({ title, text, fields, submitLabel, onSubmit, children }: AuthFormProps) {
+export function AuthForm({
+    title,
+    text,
+    fields,
+    submitLabel,
+    onSubmit,
+    children,
+    passwordLabelEnd,
+}: AuthFormProps) {
 
     function handleSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -65,7 +83,11 @@ export function AuthForm({ title, text, fields, submitLabel, onSubmit, children 
             <p>{text}</p>
             {fields.map(field =>
                 field.type === 'password' ? (
-                    <PasswordField key={field.name} field={field} />
+                    <PasswordField
+                        key={field.name}
+                        field={field}
+                        labelEnd={passwordLabelEnd}
+                    />
                 ) : (
                     <div key={field.name} className="field-row">
                         <p className="field-desc">{field.inputDescription}</p>

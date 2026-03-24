@@ -2,11 +2,12 @@ import { useState } from "react"
 import "./UserLoginAccount.css"
 import { AiFillLock, AiOutlineMail } from "react-icons/ai"
 import { AuthForm } from "../../../components/authForm/AuthForm"
+import { useUserAuthNavigation } from "../../../contexts/UserAuthNavigationContext"
 import { FcGoogle } from "react-icons/fc"
 import { FaApple } from "react-icons/fa"
 
 export function UserLoginAccount() {
-
+    const { goToChangePassword } = useUserAuthNavigation()
     const [saveLogin, setSaveLogin] = useState(false)
 
     const fields = [
@@ -38,6 +39,15 @@ export function UserLoginAccount() {
                 fields={fields}
                 submitLabel="Logar"
                 onSubmit={handleSubmit}
+                passwordLabelEnd={
+                    <button
+                        type="button"
+                        className="forgot-password-link"
+                        onClick={goToChangePassword}
+                    >
+                        Esqueceu a senha?
+                    </button>
+                }
             >
                 <div className="save-login">
                     <button type="button" onClick={handleSaveLogin} className={saveLogin ? 'active' : ''}></button>

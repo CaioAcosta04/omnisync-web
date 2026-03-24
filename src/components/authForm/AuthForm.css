@@ -3,8 +3,7 @@
   flex-direction: column;
   gap: 20px;
   width: 100%;
-  padding: 30px 70px 0px 70px;
-  background-color: white;
+  padding: 0px 50px 0px 50px;
   margin: 0 auto;
 }
 
@@ -26,7 +25,7 @@
 .form-footer {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Traz o checkbox para bem perto do botão */
+  gap: 8px;
   width: 100%;
 }
 
@@ -79,4 +78,16 @@ button .password-toggle {
 .field-desc {
   display: block;
   font-size: 12px;
+}
+
+.field-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+}
+
+.field-label-row .field-desc {
+  margin: 0;
 }

@@ -10,6 +10,8 @@ import {
   FiLogIn,
 } from 'react-icons/fi'
 import { AppSidebar } from './components/AppSidebar'
+import { AppTopbar, type AppTopbarVariant } from './components/AppTopbar/AppTopbar'
+import { UserAuthNavigationProvider } from './contexts/UserAuthNavigationContext'
 import {
   DashboardScreen,
   MarketplacesScreen,
@@ -22,6 +24,12 @@ import {
 import { UserCreateAccount } from './screens/user/userCreateAccount/UserCreateAccount'
 import { UserLoginAccount } from './screens/user/userLogin/UserLoginAccount'
 import { UserChangePassword } from './screens/user/userChangePassword/UserChangePassword'
+
+const USER_AUTH_TOPBAR_VARIANT: Partial<Record<string, AppTopbarVariant>> = {
+  CreateAccount: 'create',
+  Login: 'login',
+  ChangePassword: 'changePassword',
+}
 
 function App() {
   const items = useMemo(
@@ -41,22 +49,28 @@ function App() {
   )
   const [activeLabel, setActiveLabel] = useState(items[0]?.label ?? '')
   const activeItem = items.find((item) => item.label === activeLabel) ?? items[0]
+  const authTopbarVariant = USER_AUTH_TOPBAR_VARIANT[activeLabel]
 
   return (
-    <div style={styles.layout}>
-      <AppSidebar
-        items={items}
-        activeLabel={activeLabel}
-        onSelect={setActiveLabel}
-      />
-      <main style={styles.main}>
-        {activeItem ? (
-          <div style={styles.screenTitle}>
-            <activeItem.Screen />
-          </div>
-        ) : null}
-      </main>
-    </div>
+    <UserAuthNavigationProvider onNavigate={setActiveLabel}>
+      <div style={styles.layout}>
+        <AppSidebar
+          items={items}
+          activeLabel={activeLabel}
+          onSelect={setActiveLabel}
+        />
+        <div style={styles.mainColumn}>
+          {authTopbarVariant ? <AppTopbar variant={authTopbarVariant} /> : null}
+          <main style={styles.main}>
+            {activeItem ? (
+              <div style={styles.screenTitle}>
+                <activeItem.Screen />
+              </div>
+            ) : null}
+          </main>
+        </div>
+      </div>
+    </UserAuthNavigationProvider>
   )
 }
 
@@ -67,13 +81,21 @@ const styles = {
     display: 'flex',
     minHeight: '100vh',
   },
+  mainColumn: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '100vh',
+    minWidth: 0,
+    backgroundColor: '#f3f4f6',
+  },
   main: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    minHeight: '100vh',
+    minHeight: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: '24px 16px',
   },
   screenTitle: {
     fontSize: '32px',

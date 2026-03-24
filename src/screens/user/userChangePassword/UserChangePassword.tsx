@@ -27,9 +27,6 @@ export function UserChangePassword() {
                 submitLabel="Enviar link"
                 onSubmit={handleSubmit}
             />
-            <div className="change-content">
-                <a href="../userLogin/UserLoginAccount">Voltar para tela de login</a>
-            </div>
         </div>
     )
 }
