@@ -6,6 +6,7 @@ import { AuthForm } from "../../../components/authForm/AuthForm";
 import { BsBuildings } from "react-icons/bs";
 
 export function UserCreateAccount() {
+    
     const fields = [
         { inputDescription: 'Nome Completo', icon: <AiOutlineUser size={25} />, name: 'name', label: 'John Doe', type: 'string' },
         { inputDescription: 'Cpf', icon: <AiOutlineIdcard size={25} />, name: 'cpf', label: '123.456.789-10', type: 'string' },

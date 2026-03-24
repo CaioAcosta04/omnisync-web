@@ -21,6 +21,7 @@ import {
 } from './screens'
 import { UserCreateAccount } from './screens/user/userCreateAccount/UserCreateAccount'
 import { UserLoginAccount } from './screens/user/userLogin/UserLoginAccount'
+import { UserChangePassword } from './screens/user/userChangePassword/UserChangePassword'
 
 function App() {
   const items = useMemo(
@@ -34,6 +35,7 @@ function App() {
       { label: 'Settings', icon: <FiSettings size={20} />, Screen: SettingsScreen },
       { label: 'CreateAccount', icon: <FiLogIn size={20} />, Screen: UserCreateAccount },
       { label: 'Login', icon: <FiLogIn size={20} />, Screen: UserLoginAccount },
+      { label: 'ChangePassword', icon: <FiLogIn size={20} />, Screen: UserChangePassword },
     ],
     []
   )
