@@ -1,0 +1,93 @@
+.form{
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  padding: 0px 50px 0px 50px;
+  margin: 0 auto;
+}
+
+.form h1{
+  font-size: 45px;
+}
+
+.submit-button {
+  background-color: #6467F2;
+  font-size: 17px;
+  padding: 12px;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+}
+
+.form-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.form p{
+  font-size: 13px;
+}
+
+.form input{
+  padding: 10px;
+  border-radius: 5px;
+  width: 100%;
+}
+
+.auth-field {
+  position: relative;
+}
+
+.auth-field-icon {
+  position: absolute;
+  left: 10px;
+  top: 70%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.auth-field input {
+  padding-left: 40px;
+  padding-right: 36px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 70%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: #000000;
+  font-size: inherit;
+}
+
+button .password-toggle {
+  background-color: white;
+}
+
+.field-desc {
+  display: block;
+  font-size: 12px;
+}
+
+.field-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+}
+
+.field-label-row .field-desc {
+  margin: 0;
+}

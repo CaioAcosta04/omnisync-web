@@ -1,0 +1,76 @@
+.app-topbar {
+  width: 100%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 28px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  box-sizing: border-box;
+  height: 89px;
+}
+
+.app-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.app-topbar-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.app-topbar-title {
+  font-weight: 700;
+  font-size: 18px;
+  color: #1f2937;
+  letter-spacing: -0.02em;
+}
+
+.app-topbar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.app-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.app-topbar-hint {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.app-topbar-cta {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4f46e5;
+  background-color: #eef2ff;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-topbar-cta:hover {
+  background-color: #e0e7ff;
+}
+
+.app-topbar-cta:focus-visible {
+  outline: 2px solid #6467f2;
+  outline-offset: 2px;
+}
