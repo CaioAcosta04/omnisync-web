@@ -191,7 +191,7 @@ export function ManageUserModal({ user, onClose, onSave }: ManageUserModalProps)
             {ALL_PERMISSIONS.map((perm) => {
               const checked = permissions.includes(perm)
               return (
-                <label key={perm} style={styles.permItem}>
+                <label key={perm} style={styles.permItem} onClick={() => togglePermission(perm)}>
                   <div
                     style={{
                       ...styles.checkbox,
