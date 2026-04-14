@@ -3,8 +3,8 @@ import {
   FiActivity,
   FiArchive,
   FiGlobe,
-  FiHome,
   FiLayers,
+  FiList,
   FiLogIn,
   FiSettings,
   FiUsers,
@@ -15,10 +15,10 @@ import { UserAuthNavigationProvider } from './contexts/UserAuthNavigationContext
 import {
   ActivityScreen,
   DashboardScreen,
+  ListingsScreen,
   MarketplacesScreen,
   SettingsScreen,
   StockScreen,
-  StoresScreen,
   UsersScreen,
 } from './screens'
 import { UserCreateAccount } from './screens/user/userCreateAccount/UserCreateAccount'
@@ -38,7 +38,7 @@ function App() {
       { label: 'Stock', icon: <FiArchive size={20} />, Screen: StockScreen },
       { label: 'Marketplaces', icon: <FiGlobe size={20} />, Screen: MarketplacesScreen },
       { label: 'Activity', icon: <FiActivity size={20} />, Screen: ActivityScreen },
-      { label: 'Stores', icon: <FiHome size={20} />, Screen: StoresScreen },
+      { label: 'Listings', icon: <FiList size={20} />, Screen: ListingsScreen },
       { label: 'Users', icon: <FiUsers size={20} />, Screen: UsersScreen },
       { label: 'Settings', icon: <FiSettings size={20} />, Screen: SettingsScreen },
       { label: 'CreateAccount', icon: <FiLogIn size={20} />, Screen: UserCreateAccount },
