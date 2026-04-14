@@ -12,6 +12,7 @@ import {
   FiUserPlus,
   FiUsers,
 } from 'react-icons/fi'
+import { CreateUserModal, type NewUserData } from '../components/CreateUserModal'
 import { ManageUserModal, type ManagedUser } from '../components/ManageUserModal'
 
 type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
@@ -113,10 +114,16 @@ export function UsersScreen() {
   const [currentPage, setCurrentPage] = useState(1)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [managingUser, setManagingUser] = useState<PlatformUser | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const handleSaveUser = (updated: ManagedUser) => {
     console.log('User updated:', updated)
     setManagingUser(null)
+  }
+
+  const handleCreateUser = (data: NewUserData) => {
+    console.log('New user:', data)
+    setShowCreateModal(false)
   }
 
   const filteredUsers = useMemo(() => {
@@ -226,7 +233,7 @@ export function UsersScreen() {
           <button type="button" style={styles.bellBtn} aria-label="Notifications">
             <FiBell size={20} color="#6b7280" />
           </button>
-          <button type="button" style={styles.createUserBtn}>
+          <button type="button" style={styles.createUserBtn} onClick={() => setShowCreateModal(true)}>
             <FiUserPlus size={16} />
             Create User
           </button>
@@ -422,6 +429,12 @@ export function UsersScreen() {
         user={managingUser}
         onClose={() => setManagingUser(null)}
         onSave={handleSaveUser}
+      />
+
+      <CreateUserModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreateUser}
       />
     </div>
   )
