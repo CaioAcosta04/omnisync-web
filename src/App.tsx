@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react'
 import {
-  FiLayers,
+  FiActivity,
   FiArchive,
   FiGlobe,
-  FiShoppingCart,
   FiHome,
-  FiUsers,
-  FiSettings,
+  FiLayers,
   FiLogIn,
+  FiSettings,
+  FiUsers,
 } from 'react-icons/fi'
 import { AppSidebar } from './components/AppSidebar'
 import { AppTopbar, type AppTopbarVariant } from './components/AppTopbar/AppTopbar'
 import { UserAuthNavigationProvider } from './contexts/UserAuthNavigationContext'
 import {
+  ActivityScreen,
   DashboardScreen,
   MarketplacesScreen,
-  OrdersScreen,
   SettingsScreen,
   StockScreen,
   StoresScreen,
@@ -37,7 +37,7 @@ function App() {
       { label: 'Dashboard', icon: <FiLayers size={20} />, Screen: DashboardScreen },
       { label: 'Stock', icon: <FiArchive size={20} />, Screen: StockScreen },
       { label: 'Marketplaces', icon: <FiGlobe size={20} />, Screen: MarketplacesScreen },
-      { label: 'Orders', icon: <FiShoppingCart size={20} />, Screen: OrdersScreen },
+      { label: 'Activity', icon: <FiActivity size={20} />, Screen: ActivityScreen },
       { label: 'Stores', icon: <FiHome size={20} />, Screen: StoresScreen },
       { label: 'Users', icon: <FiUsers size={20} />, Screen: UsersScreen },
       { label: 'Settings', icon: <FiSettings size={20} />, Screen: SettingsScreen },
