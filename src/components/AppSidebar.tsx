@@ -67,7 +67,10 @@ export function AppSidebar({ items, activeLabel, onSelect }: AppSidebarProps) {
 const sidebarStyles = {
   sidebar: {
     height: '100vh',
+    position: 'sticky',
+    top: 0,
     borderRight: '1px solid #eee',
+    flexShrink: 0,
   },
   sidebarInner: {
     display: 'flex',

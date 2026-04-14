@@ -79,13 +79,14 @@ export default App
 const styles = {
   layout: {
     display: 'flex',
-    minHeight: '100vh',
+    height: '100vh',
+    overflow: 'hidden',
   },
   mainColumn: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    minHeight: '100vh',
+    height: '100vh',
     minWidth: 0,
     backgroundColor: '#f3f4f6',
   },
