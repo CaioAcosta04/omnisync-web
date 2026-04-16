@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ComponentType } from 'react'
 import {
   FiLayers,
   FiArchive,
@@ -7,11 +7,13 @@ import {
   FiHome,
   FiUsers,
   FiSettings,
-  FiLogIn,
 } from 'react-icons/fi'
 import { AppSidebar } from './components/AppSidebar'
 import { AppTopbar, type AppTopbarVariant } from './components/AppTopbar/AppTopbar'
-import { UserAuthNavigationProvider } from './contexts/UserAuthNavigationContext'
+import {
+  UserAuthNavigationProvider,
+  type UserAuthScreenLabel,
+} from './contexts/UserAuthNavigationContext'
 import {
   DashboardScreen,
   MarketplacesScreen,
@@ -25,14 +27,22 @@ import { UserCreateAccount } from './screens/user/userCreateAccount/UserCreateAc
 import { UserLoginAccount } from './screens/user/userLogin/UserLoginAccount'
 import { UserChangePassword } from './screens/user/userChangePassword/UserChangePassword'
 
-const USER_AUTH_TOPBAR_VARIANT: Partial<Record<string, AppTopbarVariant>> = {
+const USER_AUTH_TOPBAR_VARIANT: Record<UserAuthScreenLabel, AppTopbarVariant> = {
   CreateAccount: 'create',
   Login: 'login',
   ChangePassword: 'changePassword',
 }
 
+const AUTH_SCREENS: Record<UserAuthScreenLabel, ComponentType> = {
+  Login: UserLoginAccount,
+  CreateAccount: UserCreateAccount,
+  ChangePassword: UserChangePassword,
+}
+
 function App() {
-  const items = useMemo(
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
+  const sidebarItems = useMemo(
     () => [
       { label: 'Dashboard', icon: <FiLayers size={20} />, Screen: DashboardScreen },
       { label: 'Stock', icon: <FiArchive size={20} />, Screen: StockScreen },
@@ -41,35 +51,59 @@ function App() {
       { label: 'Stores', icon: <FiHome size={20} />, Screen: StoresScreen },
       { label: 'Users', icon: <FiUsers size={20} />, Screen: UsersScreen },
       { label: 'Settings', icon: <FiSettings size={20} />, Screen: SettingsScreen },
-      { label: 'CreateAccount', icon: <FiLogIn size={20} />, Screen: UserCreateAccount },
-      { label: 'Login', icon: <FiLogIn size={20} />, Screen: UserLoginAccount },
-      { label: 'ChangePassword', icon: <FiLogIn size={20} />, Screen: UserChangePassword },
     ],
     []
   )
-  const [activeLabel, setActiveLabel] = useState(items[0]?.label ?? '')
-  const activeItem = items.find((item) => item.label === activeLabel) ?? items[0]
-  const authTopbarVariant = USER_AUTH_TOPBAR_VARIANT[activeLabel]
+  const [activeLabel, setActiveLabel] = useState(sidebarItems[0]?.label ?? 'Dashboard')
+  const activeItem =
+    sidebarItems.find((item) => item.label === activeLabel) ?? sidebarItems[0]
+
+  const handleAuthNavigate = useCallback((label: UserAuthScreenLabel) => {
+    setAuthScreen(label)
+  }, [])
+
+  const handleAuthenticated = useCallback(() => {
+    setIsAuthenticated(true)
+    setActiveLabel(sidebarItems[0]?.label ?? 'Dashboard')
+  }, [sidebarItems])
+
+  const handleLogout = useCallback(() => {
+    setIsAuthenticated(false)
+    setAuthScreen('Login')
+  }, [])
+
+  const AuthScreen = AUTH_SCREENS[authScreen]
+  const authTopbarVariant = USER_AUTH_TOPBAR_VARIANT[authScreen]
 
   return (
-    <UserAuthNavigationProvider onNavigate={setActiveLabel}>
-      <div style={styles.layout}>
-        <AppSidebar
-          items={items}
-          activeLabel={activeLabel}
-          onSelect={setActiveLabel}
-        />
-        <div style={styles.mainColumn}>
-          {authTopbarVariant ? <AppTopbar variant={authTopbarVariant} /> : null}
-          <main style={styles.main}>
-            {activeItem ? (
-              <div style={styles.screenTitle}>
-                <activeItem.Screen />
-              </div>
-            ) : null}
+    <UserAuthNavigationProvider
+      onNavigate={handleAuthNavigate}
+      onAuthenticated={handleAuthenticated}
+      onLogout={handleLogout}
+    >
+      {!isAuthenticated ? (
+        <div style={styles.authLayout}>
+          <AppTopbar variant={authTopbarVariant} />
+          <main style={styles.authMain}>
+            <div style={styles.screenTitle}>
+              <AuthScreen />
+            </div>
           </main>
         </div>
-      </div>
+      ) : (
+        <div style={styles.layout}>
+          <AppSidebar items={sidebarItems} activeLabel={activeLabel} onSelect={setActiveLabel} />
+          <div style={styles.mainColumn}>
+            <main style={styles.main}>
+              {activeItem ? (
+                <div style={styles.screenTitle}>
+                  <activeItem.Screen />
+                </div>
+              ) : null}
+            </main>
+          </div>
+        </div>
+      )}
     </UserAuthNavigationProvider>
   )
 }
@@ -77,6 +111,21 @@ function App() {
 export default App
 
 const styles = {
+  authLayout: {
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '100vh',
+    backgroundColor: '#f3f4f6',
+  },
+  authMain: {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    padding: '24px 16px',
+    overflowY: 'auto',
+  },
   layout: {
     display: 'flex',
     minHeight: '100vh',
@@ -106,5 +155,7 @@ const styles = {
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'center',
+    alignContent: 'center',
+    flexWrap: 'wrap',
   },
 } as const

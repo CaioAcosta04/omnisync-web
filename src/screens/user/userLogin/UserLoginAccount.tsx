@@ -1,22 +1,67 @@
-import { useState } from "react"
 import "./UserLoginAccount.css"
+import { useState } from "react"
+import { FcGoogle } from "react-icons/fc"
+import { FaApple } from "react-icons/fa"
 import { AiFillLock, AiOutlineMail } from "react-icons/ai"
 import { AuthForm } from "../../../components/authForm/AuthForm"
 import { useUserAuthNavigation } from "../../../contexts/UserAuthNavigationContext"
-import { FcGoogle } from "react-icons/fc"
-import { FaApple } from "react-icons/fa"
+import { API_BASE_URL } from "../../../config/api"
 
 export function UserLoginAccount() {
-    const { goToChangePassword } = useUserAuthNavigation()
+    const { goToChangePassword, completeAuthentication } = useUserAuthNavigation()
     const [saveLogin, setSaveLogin] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [errorMessage, setErrorMessage] = useState('')
 
     const fields = [
-        { inputDescription: "Email", icon: <AiOutlineMail size={25} />, name: 'email', label: 'johndoe@email.com', type: 'email' },
-        { inputDescription: 'Senha', icon: <AiFillLock size={25} />, name: 'password', label: '********', type: 'password' },
+        { 
+            inputDescription: "Email", 
+            icon: <AiOutlineMail size={25} />, 
+            name: 'email', label: 'johndoe@email.com', 
+            type: 'email',
+            minLength: 2,
+            validationMessage: 'Informe o email.',
+        },
+        { 
+            inputDescription: 'Senha', 
+            icon: <AiFillLock size={25} />, 
+            name: 'password', 
+            label: '********', 
+            type: 'password' ,
+            minLength: 6,
+            validationMessage: 'Informe a senha.',
+        },
     ]
 
-    const handleSubmit = (data: Record<string, string>) => {
-        console.log("Dados:", data, "Salvar login:", saveLogin)
+    const handleSubmit = async (data: Record<string, string>) => {
+        setIsSubmitting(true)
+        setErrorMessage('')
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: data.email,
+                    password: data.password
+                })
+            })
+    
+            if (!response.ok) {
+                const message = await response.text()
+                throw new Error(message || 'Erro no login')
+            }
+    
+            await response.json()
+            completeAuthentication()
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Erro inesperado'
+            setErrorMessage(message)
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleSaveLogin = () => {
@@ -37,8 +82,11 @@ export function UserLoginAccount() {
                 title="Bem vindo"
                 text="Entre com seus dados para logar"
                 fields={fields}
-                submitLabel="Logar"
+                submitLabel={isSubmitting ? 'Entrando...' : 'Logar'}
                 onSubmit={handleSubmit}
+                onValidationError={setErrorMessage}
+                errorMessage={errorMessage}
+                submitDisabled={isSubmitting}
                 passwordLabelEnd={
                     <button
                         type="button"
