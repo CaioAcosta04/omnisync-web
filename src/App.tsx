@@ -5,7 +5,6 @@ import {
   FiGlobe,
   FiLayers,
   FiList,
-  FiLogIn,
   FiSettings,
   FiUsers,
 } from 'react-icons/fi'
