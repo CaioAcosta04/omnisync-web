@@ -22,6 +22,11 @@
   width: 100%;
 }
 
+.submit-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .form-footer {
   display: flex;
   flex-direction: column;
@@ -90,4 +95,15 @@ button .password-toggle {
 
 .field-label-row .field-desc {
   margin: 0;
+}
+
+.auth-form-error {
+  margin: 0;
+  font-size: 12px;
+  color: #b91c1c;
+  border: 2px solid #b91c1c;
+  border-radius: 5px;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
 }

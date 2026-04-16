@@ -11,6 +11,20 @@
     background-color: white;
 }
 
+.step-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 50px;
+}
+
+.step-indicator {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6467F2;
+    margin: 0;
+}
+
 .create-content{
     display: flex;
     flex-direction: column;
@@ -68,4 +82,20 @@
     font-weight: 600;
     width: 180px;
     padding: 11px;
+}
+
+.back-step-button {
+    background: transparent;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 0;
+    color: #6467F2;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.back-step-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
