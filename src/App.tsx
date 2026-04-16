@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useState, type ComponentType } from 'react'
 import {
-  FiLayers,
+  FiActivity,
   FiArchive,
   FiGlobe,
-  FiShoppingCart,
-  FiHome,
-  FiUsers,
+  FiLayers,
+  FiList,
+  FiLogIn,
   FiSettings,
+  FiUsers,
 } from 'react-icons/fi'
 import { AppSidebar } from './components/AppSidebar'
 import { AppTopbar, type AppTopbarVariant } from './components/AppTopbar/AppTopbar'
@@ -15,12 +16,12 @@ import {
   type UserAuthScreenLabel,
 } from './contexts/UserAuthNavigationContext'
 import {
+  ActivityScreen,
   DashboardScreen,
+  ListingsScreen,
   MarketplacesScreen,
-  OrdersScreen,
   SettingsScreen,
   StockScreen,
-  StoresScreen,
   UsersScreen,
 } from './screens'
 import { UserCreateAccount } from './screens/user/userCreateAccount/UserCreateAccount'
@@ -47,8 +48,8 @@ function App() {
       { label: 'Dashboard', icon: <FiLayers size={20} />, Screen: DashboardScreen },
       { label: 'Stock', icon: <FiArchive size={20} />, Screen: StockScreen },
       { label: 'Marketplaces', icon: <FiGlobe size={20} />, Screen: MarketplacesScreen },
-      { label: 'Orders', icon: <FiShoppingCart size={20} />, Screen: OrdersScreen },
-      { label: 'Stores', icon: <FiHome size={20} />, Screen: StoresScreen },
+      { label: 'Activity', icon: <FiActivity size={20} />, Screen: ActivityScreen },
+      { label: 'Listings', icon: <FiList size={20} />, Screen: ListingsScreen },
       { label: 'Users', icon: <FiUsers size={20} />, Screen: UsersScreen },
       { label: 'Settings', icon: <FiSettings size={20} />, Screen: SettingsScreen },
     ],
@@ -128,13 +129,14 @@ const styles = {
   },
   layout: {
     display: 'flex',
-    minHeight: '100vh',
+    height: '100vh',
+    overflow: 'hidden',
   },
   mainColumn: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    minHeight: '100vh',
+    height: '100vh',
     minWidth: 0,
     backgroundColor: '#f3f4f6',
   },
