@@ -40,7 +40,7 @@ const AUTH_SCREENS: Record<UserAuthScreenLabel, ComponentType> = {
 }
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(true) // TODO: temporary bypass
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
   const sidebarItems = useMemo(
     () => [
