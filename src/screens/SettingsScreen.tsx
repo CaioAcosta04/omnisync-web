@@ -16,6 +16,7 @@ import {
   FiUser,
 } from 'react-icons/fi'
 import { BsBuildings } from 'react-icons/bs'
+import { useUserAuthNavigation } from '../contexts/UserAuthNavigationContext'
 
 type SettingsTab = 'profile' | 'store' | 'security' | 'notifications' | 'appearance'
 
@@ -52,6 +53,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () =>
 /* ─── Profile Section ─── */
 
 function ProfileSection() {
+  const { logout } = useUserAuthNavigation()
   const [name, setName] = useState('Alex Rivera')
   const [email, setEmail] = useState('alex.rivera@omnisync.com')
 
@@ -102,6 +104,11 @@ function ProfileSection() {
             <FiSave size={16} />
             Salvar Alterações
           </button>
+        </div>
+        <div style={s.divLogout}>
+            <button type="button" style={s.logout} onClick={logout}>
+              Logout
+            </button>
         </div>
       </div>
     </div>
@@ -585,6 +592,25 @@ const s = {
     fontSize: '13px',
     color: '#6b7280',
     marginTop: '2px',
+  },
+  divLogout:{
+    display: 'flex',
+    justifyContent: 'flex-end',
+    paddingTop: '10px',
+  },
+  logout:{
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '10px 16px',
+    borderRadius: '10px',
+    border: '1px solid #991b1b',
+    backgroundColor: '#fee2e2',
+    color: '#991b1b',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    fontWeight: 600,
+    cursor: 'pointer',
   },
 
   /* Fields */
