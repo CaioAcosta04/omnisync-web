@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import {
   FiActivity,
   FiArchive,
@@ -40,6 +40,7 @@ const AUTH_SCREENS: Record<UserAuthScreenLabel, ComponentType> = {
 }
 
 function App() {
+  const mainScrollRef = useRef<HTMLElement | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
   const sidebarItems = useMemo(
@@ -75,6 +76,10 @@ function App() {
   const AuthScreen = AUTH_SCREENS[authScreen]
   const authTopbarVariant = USER_AUTH_TOPBAR_VARIANT[authScreen]
 
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
+  }, [activeLabel, isAuthenticated])
+
   return (
     <UserAuthNavigationProvider
       onNavigate={handleAuthNavigate}
@@ -85,7 +90,7 @@ function App() {
         <div style={styles.authLayout}>
           <AppTopbar variant={authTopbarVariant} />
           <main style={styles.authMain}>
-            <div style={styles.screenTitle}>
+            <div style={styles.authScreenShell}>
               <AuthScreen />
             </div>
           </main>
@@ -94,7 +99,7 @@ function App() {
         <div style={styles.layout}>
           <AppSidebar items={sidebarItems} activeLabel={activeLabel} onSelect={setActiveLabel} />
           <div style={styles.mainColumn}>
-            <main style={styles.main}>
+            <main ref={mainScrollRef} style={styles.main}>
               {activeItem ? (
                 <div style={styles.screenTitle}>
                   <activeItem.Screen />
@@ -154,6 +159,14 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'stretch',
+    boxSizing: 'border-box',
+  },
+  authScreenShell: {
+    width: '100%',
+    minWidth: 0,
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
     boxSizing: 'border-box',
   },
 } as const
