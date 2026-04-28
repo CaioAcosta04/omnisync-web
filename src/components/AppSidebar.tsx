@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Sidebar, Menu, MenuItem } from 'react-pro-sidebar'
 import logo from '../assets/omni_logo.png'
 import userExample from '../assets/user_example.png'
-import { useUserAuthNavigation } from '../contexts/UserAuthNavigationContext'
 
 type SidebarItem = {
   label: string
@@ -16,7 +15,6 @@ type AppSidebarProps = {
 }
 
 export function AppSidebar({ items, activeLabel, onSelect }: AppSidebarProps) {
-  const { logout } = useUserAuthNavigation()
 
   return (
     <Sidebar
@@ -61,11 +59,6 @@ export function AppSidebar({ items, activeLabel, onSelect }: AppSidebarProps) {
             <div style={sidebarStyles.userName}>User Example</div>
             <div style={sidebarStyles.userRole}>Admin Access</div>
           </div>
-        </div>
-        <div style={sidebarStyles.divLogout}>
-          <button type="button" style={sidebarStyles.logout} onClick={logout}>
-            Logout
-          </button>
         </div>
       </div>
     </Sidebar>
@@ -168,16 +161,5 @@ const sidebarStyles = {
     fontSize: '12px',
     color: '#6b7280',
     marginTop: '2px',
-  },
-  divLogout: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    margin: '0 0 10px 0'
-  },
-  logout: {
-    color: '#1f2937',
-    padding: '5px 10px',
-    cursor: 'pointer',
   },
 } as const
