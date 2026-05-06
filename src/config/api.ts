@@ -1,9 +1,17 @@
 /**
  * Base da API.
- * - Em `npm run dev`: vazio → mesma origem (localhost); o Vite faz proxy de `/api` → VM (veja vite.config).
- * - Em build de produção: `VITE_API_BASE_URL` ou fallback público.
+ * - Dev: vazio → proxy Vite (`vite.config`) para a VM.
+ * - Vercel (`VERCEL=1` no build): vazio → `vercel.json` faz rewrite de `/api` para a VM (evita CORS em previews *.vercel.app).
+ * - Outros deploys: `VITE_API_BASE_URL` se definida, senão `https://omnisync.site` (exige CORS com essa origem).
  */
+const envBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
+const useSameOriginApi =
+  import.meta.env.DEV || import.meta.env.VITE_VERCEL === '1'
+
 export const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ??
-  (import.meta.env.DEV ? '' : 'https://omnisync.site')
+  envBase
+    ? envBase
+    : useSameOriginApi
+      ? ''
+      : 'https://omnisync.site'
 ).replace(/\/$/, '')

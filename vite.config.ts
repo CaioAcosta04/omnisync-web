@@ -10,6 +10,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    define: {
+      /** Disponível no bundle: build na Vercel usa `/api` + rewrite (evita CORS em *.vercel.app). */
+      'import.meta.env.VITE_VERCEL': JSON.stringify(process.env.VERCEL === '1' ? '1' : ''),
+    },
     server: {
       proxy: {
         '/api': {
