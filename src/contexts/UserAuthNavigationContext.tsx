@@ -6,10 +6,8 @@ export type UserAuthNav = {
   goToLogin: () => void
   goToCreateAccount: () => void
   goToChangePassword: () => void
-  /** Chamar após login ou cadastro bem-sucedido para entrar no app principal. */
-  completeAuthentication: () => void
   /** Sai do app autenticado e volta para a tela de login. */
-  logout: () => void
+  logout: () => void | Promise<void>
 }
 
 const UserAuthNavigationContext = createContext<UserAuthNav | null>(null)
@@ -17,23 +15,20 @@ const UserAuthNavigationContext = createContext<UserAuthNav | null>(null)
 export function UserAuthNavigationProvider({
   children,
   onNavigate,
-  onAuthenticated,
   onLogout,
 }: {
   children: ReactNode
   onNavigate: (label: UserAuthScreenLabel) => void
-  onAuthenticated: () => void
-  onLogout: () => void
+  onLogout: () => void | Promise<void>
 }) {
   const value = useMemo<UserAuthNav>(
     () => ({
       goToLogin: () => onNavigate('Login'),
       goToCreateAccount: () => onNavigate('CreateAccount'),
       goToChangePassword: () => onNavigate('ChangePassword'),
-      completeAuthentication: onAuthenticated,
       logout: onLogout,
     }),
-    [onNavigate, onAuthenticated, onLogout]
+    [onNavigate, onLogout]
   )
   return (
     <UserAuthNavigationContext.Provider value={value}>
@@ -42,6 +37,8 @@ export function UserAuthNavigationProvider({
   )
 }
 
+/** Hook de navegação entre telas de autenticação. */
+// eslint-disable-next-line react-refresh/only-export-components -- hook pareado com o provider
 export function useUserAuthNavigation(): UserAuthNav {
   const ctx = useContext(UserAuthNavigationContext)
   if (!ctx) {

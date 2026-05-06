@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Sidebar, Menu, MenuItem } from 'react-pro-sidebar'
+import { useAuth } from '../contexts/AuthContext'
 import logo from '../assets/omni_logo.png'
-import userExample from '../assets/user_example.png'
 
 type SidebarItem = {
   label: string
@@ -14,7 +14,21 @@ type AppSidebarProps = {
   onSelect: (label: string) => void
 }
 
+function initialsFromName(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '?'
+}
+
 export function AppSidebar({ items, activeLabel, onSelect }: AppSidebarProps) {
+  const { user } = useAuth()
+  const displayName = user?.name ?? 'Usuário'
+  const displayEmail = user?.email ?? ''
+  const initials = initialsFromName(displayName)
 
   return (
     <Sidebar
@@ -49,15 +63,11 @@ export function AppSidebar({ items, activeLabel, onSelect }: AppSidebarProps) {
 
         <div style={sidebarStyles.userBlock}>
           <div style={sidebarStyles.avatar}>
-            <img
-              src={userExample}
-              alt="User example profile"
-              style={sidebarStyles.avatarImg}
-            />
+            <span style={sidebarStyles.avatarInitials}>{initials}</span>
           </div>
-          <div>
-            <div style={sidebarStyles.userName}>User Example</div>
-            <div style={sidebarStyles.userRole}>Admin Access</div>
+          <div style={sidebarStyles.userText}>
+            <div style={sidebarStyles.userName}>{displayName}</div>
+            <div style={sidebarStyles.userRole}>{displayEmail || '—'}</div>
           </div>
         </div>
       </div>
@@ -143,23 +153,34 @@ const sidebarStyles = {
     width: '40px',
     height: '40px',
     borderRadius: '50%',
-    backgroundSize: 'cover',
+    backgroundColor: '#ddd6fe',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  avatarImg: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-    borderRadius: 'inherit',
-    display: 'block',
+  avatarInitials: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#5b21b6',
+  },
+  userText: {
+    minWidth: 0,
   },
   userName: {
     fontWeight: 600,
     fontSize: '14px',
     color: '#1f2937',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   userRole: {
     fontSize: '12px',
     color: '#6b7280',
     marginTop: '2px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
 } as const

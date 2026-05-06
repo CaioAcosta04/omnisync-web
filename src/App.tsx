@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fi'
 import { AppSidebar } from './components/AppSidebar'
 import { AppTopbar, type AppTopbarVariant } from './components/AppTopbar/AppTopbar'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import {
   UserAuthNavigationProvider,
   type UserAuthScreenLabel,
@@ -39,9 +40,9 @@ const AUTH_SCREENS: Record<UserAuthScreenLabel, ComponentType> = {
   ChangePassword: UserChangePassword,
 }
 
-function App() {
+function AppShell() {
   const mainScrollRef = useRef<HTMLElement | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const { user, status, skipAuth, logout: authLogout } = useAuth()
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
   const sidebarItems = useMemo(
     () => [
@@ -63,16 +64,12 @@ function App() {
     setAuthScreen(label)
   }, [])
 
-  const handleAuthenticated = useCallback(() => {
-    setIsAuthenticated(true)
-    setActiveLabel(sidebarItems[0]?.label ?? 'Dashboard')
-  }, [sidebarItems])
-
-  const handleLogout = useCallback(() => {
-    setIsAuthenticated(false)
+  const handleLogout = useCallback(async () => {
+    await authLogout()
     setAuthScreen('Login')
-  }, [])
+  }, [authLogout])
 
+  const isAuthenticated = user !== null
   const AuthScreen = AUTH_SCREENS[authScreen]
   const authTopbarVariant = USER_AUTH_TOPBAR_VARIANT[authScreen]
 
@@ -80,10 +77,17 @@ function App() {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
   }, [activeLabel, isAuthenticated])
 
+  if (!skipAuth && status === 'loading') {
+    return (
+      <div style={styles.loadingScreen}>
+        <p style={styles.loadingText}>Carregando…</p>
+      </div>
+    )
+  }
+
   return (
     <UserAuthNavigationProvider
       onNavigate={handleAuthNavigate}
-      onAuthenticated={handleAuthenticated}
       onLogout={handleLogout}
     >
       {!isAuthenticated ? (
@@ -113,9 +117,29 @@ function App() {
   )
 }
 
+function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
+  )
+}
+
 export default App
 
 const styles = {
+  loadingScreen: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100vh',
+    backgroundColor: '#f3f4f6',
+  },
+  loadingText: {
+    margin: 0,
+    fontSize: '16px',
+    color: '#4b5563',
+  },
   authLayout: {
     display: 'flex',
     flexDirection: 'column',

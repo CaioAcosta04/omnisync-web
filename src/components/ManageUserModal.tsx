@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { FiCheck, FiShield, FiUser, FiX } from 'react-icons/fi'
 
 type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
@@ -56,19 +56,22 @@ const AVATAR_COLORS: Record<string, string> = {
 }
 
 export function ManageUserModal({ user, onClose, onSave }: ManageUserModalProps) {
-  const [role, setRole] = useState<UserRole>('viewer')
-  const [status, setStatus] = useState<UserStatus>('active')
-  const [permissions, setPermissions] = useState<string[]>([])
-
-  useEffect(() => {
-    if (user) {
-      setRole(user.role)
-      setStatus(user.status)
-      setPermissions([...user.permissions])
-    }
-  }, [user])
-
   if (!user) return null
+  return <ManageUserModalForm key={user.id} user={user} onClose={onClose} onSave={onSave} />
+}
+
+function ManageUserModalForm({
+  user,
+  onClose,
+  onSave,
+}: {
+  user: ManagedUser
+  onClose: () => void
+  onSave: (user: ManagedUser) => void
+}) {
+  const [role, setRole] = useState<UserRole>(user.role)
+  const [status, setStatus] = useState<UserStatus>(user.status)
+  const [permissions, setPermissions] = useState<string[]>([...user.permissions])
 
   const togglePermission = (perm: string) => {
     setPermissions((prev) =>
