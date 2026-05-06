@@ -16,6 +16,7 @@ import {
   FiUser,
 } from 'react-icons/fi'
 import { BsBuildings } from 'react-icons/bs'
+import { useAuth } from '../contexts/AuthContext'
 import { useUserAuthNavigation } from '../contexts/UserAuthNavigationContext'
 
 type SettingsTab = 'profile' | 'store' | 'security' | 'notifications' | 'appearance'
@@ -53,9 +54,10 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () =>
 /* ─── Profile Section ─── */
 
 function ProfileSection() {
+  const { user } = useAuth()
   const { logout } = useUserAuthNavigation()
-  const [name, setName] = useState('Alex Rivera')
-  const [email, setEmail] = useState('alex.rivera@omnisync.com')
+  const [name, setName] = useState(user?.name ?? '')
+  const [email, setEmail] = useState(user?.email ?? '')
 
   const initials = name
     .split(' ')
@@ -106,7 +108,7 @@ function ProfileSection() {
           </button>
         </div>
         <div style={s.divLogout}>
-            <button type="button" style={s.logout} onClick={logout}>
+            <button type="button" style={s.logout} onClick={() => void logout()}>
               Logout
             </button>
         </div>
@@ -173,47 +175,13 @@ function SecuritySection() {
   const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  function PasswordInput({
-    label,
-    value,
-    onChange,
-    visible,
-    onToggle,
-    placeholder,
-  }: {
-    label: string
-    value: string
-    onChange: (v: string) => void
-    visible: boolean
-    onToggle: () => void
-    placeholder: string
-  }) {
-    return (
-      <div style={s.fieldGroup}>
-        <label style={s.label}>{label}</label>
-        <div style={s.passwordWrap}>
-          <input
-            style={s.inputPassword}
-            type={visible ? 'text' : 'password'}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-          />
-          <button type="button" style={s.eyeBtn} onClick={onToggle}>
-            {visible ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div style={s.sectionColumn}>
       <div style={s.card}>
         <h3 style={s.cardTitle}>Alterar Senha</h3>
         <p style={s.cardDesc}>Mantenha sua conta segura com uma senha forte.</p>
 
-        <PasswordInput
+        <SecurityPasswordField
           label="Senha Atual"
           value={currentPw}
           onChange={setCurrentPw}
@@ -221,7 +189,7 @@ function SecuritySection() {
           onToggle={() => setShowCurrent((v) => !v)}
           placeholder="Digite sua senha atual"
         />
-        <PasswordInput
+        <SecurityPasswordField
           label="Nova Senha"
           value={newPw}
           onChange={setNewPw}
@@ -229,7 +197,7 @@ function SecuritySection() {
           onToggle={() => setShowNew((v) => !v)}
           placeholder="Mínimo 6 caracteres"
         />
-        <PasswordInput
+        <SecurityPasswordField
           label="Confirmar Nova Senha"
           value={confirmPw}
           onChange={setConfirmPw}
@@ -422,6 +390,7 @@ const SECTION_MAP: Record<SettingsTab, () => React.JSX.Element> = {
 
 export function SettingsScreen() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+  const { user } = useAuth()
   const ActiveSection = SECTION_MAP[activeTab]
 
   return (
@@ -450,7 +419,11 @@ export function SettingsScreen() {
         </nav>
 
         <div style={s.panel}>
-          <ActiveSection />
+          {activeTab === 'profile' ? (
+            <ProfileSection key={user?.id ?? 'profile'} />
+          ) : (
+            <ActiveSection />
+          )}
         </div>
       </div>
     </div>
@@ -862,3 +835,39 @@ const s = {
     gap: '14px',
   },
 } as const
+
+type SecurityPasswordFieldProps = {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  visible: boolean
+  onToggle: () => void
+  placeholder: string
+}
+
+function SecurityPasswordField({
+  label,
+  value,
+  onChange,
+  visible,
+  onToggle,
+  placeholder,
+}: SecurityPasswordFieldProps) {
+  return (
+    <div style={s.fieldGroup}>
+      <label style={s.label}>{label}</label>
+      <div style={s.passwordWrap}>
+        <input
+          style={s.inputPassword}
+          type={visible ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+        />
+        <button type="button" style={s.eyeBtn} onClick={onToggle}>
+          {visible ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+        </button>
+      </div>
+    </div>
+  )
+}

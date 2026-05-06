@@ -4,11 +4,13 @@ import { FcGoogle } from "react-icons/fc"
 import { FaApple } from "react-icons/fa"
 import { AiFillLock, AiOutlineMail } from "react-icons/ai"
 import { AuthForm } from "../../../components/authForm/AuthForm"
+import { useAuth } from "../../../contexts/AuthContext"
 import { useUserAuthNavigation } from "../../../contexts/UserAuthNavigationContext"
-import { API_BASE_URL } from "../../../config/api"
+import { apiFetch } from "../../../lib/apiFetch"
 
 export function UserLoginAccount() {
-    const { goToChangePassword, completeAuthentication } = useUserAuthNavigation()
+    const { goToChangePassword } = useUserAuthNavigation()
+    const { refreshSession } = useAuth()
     const [saveLogin, setSaveLogin] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [errorMessage, setErrorMessage] = useState('')
@@ -38,7 +40,7 @@ export function UserLoginAccount() {
         setErrorMessage('')
         
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            const response = await apiFetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -55,7 +57,10 @@ export function UserLoginAccount() {
             }
     
             await response.json()
-            completeAuthentication()
+            const sessionOk = await refreshSession()
+            if (!sessionOk) {
+                throw new Error('Login ok, mas não foi possível carregar o perfil. Tente novamente.')
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Erro inesperado'
             setErrorMessage(message)

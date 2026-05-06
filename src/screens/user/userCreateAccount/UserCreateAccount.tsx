@@ -5,11 +5,11 @@ import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { BsBuildings } from "react-icons/bs";
 import { AuthForm, type AuthFormField } from "../../../components/authForm/AuthForm";
-import { useUserAuthNavigation } from "../../../contexts/UserAuthNavigationContext";
-import { API_BASE_URL } from "../../../config/api";
+import { useAuth } from "../../../contexts/AuthContext";
+import { apiFetch } from "../../../lib/apiFetch";
 
 export function UserCreateAccount() {
-    const { completeAuthentication } = useUserAuthNavigation()
+    const { refreshSession } = useAuth()
     const [step, setStep] = useState<1 | 2>(1)
     const [companyData, setCompanyData] = useState<Record<string, string>>({})
     const [userData, setUserData] = useState<Record<string, string>>({})
@@ -92,8 +92,8 @@ export function UserCreateAccount() {
 
         try {
             const normalizedDocument = data.companyDocument?.trim().replace(/\D/g, '')
-            const response = await fetch(
-                `${API_BASE_URL}/api/client/checkCNPJ/${encodeURIComponent(normalizedDocument ?? '')}`,
+            const response = await apiFetch(
+                `/api/client/checkCNPJ/${encodeURIComponent(normalizedDocument ?? '')}`,
                 {
                     method: 'GET',
                     headers: {
@@ -139,7 +139,7 @@ export function UserCreateAccount() {
         setUserData(data)
 
         try {
-            const companyResponse = await fetch(`${API_BASE_URL}/api/client`, {
+            const companyResponse = await apiFetch('/api/client', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -162,9 +162,8 @@ export function UserCreateAccount() {
                 throw new Error('Empresa criada sem retorno de ID.')
             }
 
-            const registerResponse = await fetch(`${API_BASE_URL}/api/auth/register`, {
+            const registerResponse = await apiFetch('/api/auth/register', {
                 method: 'POST',
-                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -186,7 +185,10 @@ export function UserCreateAccount() {
 
             await registerResponse.json()
             setErrorMessage('')
-            completeAuthentication()
+            const sessionOk = await refreshSession()
+            if (!sessionOk) {
+                throw new Error('Conta criada, mas não foi possível iniciar a sessão. Faça login.')
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Erro inesperado ao criar conta.'
             setErrorMessage(message)
