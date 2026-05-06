@@ -41,7 +41,7 @@ const AUTH_SCREENS: Record<UserAuthScreenLabel, ComponentType> = {
 
 function App() {
   const mainScrollRef = useRef<HTMLElement | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(true)
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
   const sidebarItems = useMemo(
     () => [
