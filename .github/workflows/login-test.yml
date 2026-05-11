@@ -1,0 +1,50 @@
+name: Test Login
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  login-test:
+    name: Test Login
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      API_BASE_URL: https://omnisync.site
+      TEST_EMAIL: cicdlogin@teste.com
+      TEST_PASSWORD: "123456"
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Executar teste de login
+        run: node scripts/test-login.mjs
+
+      - name: Resumo
+        if: always()
+        run: |
+          echo "##Resultado do Teste de Login" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Campo | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **API** | \`$API_BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Email** | \`$TEST_EMAIL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Autor** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Login realizado com sucesso!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Login falhou!**" >> $GITHUB_STEP_SUMMARY
+          fi
