@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   FiBell,
   FiBox,
@@ -7,12 +7,18 @@ import {
   FiDownload,
   FiImage,
   FiPlus,
+  FiRefreshCw,
   FiSearch,
   FiSliders,
   FiTrendingDown,
   FiTrendingUp,
 } from 'react-icons/fi'
 import { AddProductModal, type NewProductData } from '../components/AddProductModal'
+import { StockEmptyState } from '../components/StockEmptyState'
+import { useAuth } from '../contexts/AuthContext'
+import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
+import { listProducts, syncMercadoLivreProducts } from '../services/productsApi'
+import type { ProductDto } from '../types/product'
 
 type ProductStatus = 'healthy' | 'low_stock' | 'out_of_stock'
 
@@ -21,134 +27,17 @@ type MarketplaceBadge = {
   color: string
 }
 
-type Product = {
-  id: string
+type TableRow = {
+  id: number
   name: string
   sku: string
-  totalStock: number
+  availableQty: number
   marketplaces: MarketplaceBadge[]
   lastUpdate: string
   status: ProductStatus
 }
 
-const MARKETPLACE_BADGES: Record<string, MarketplaceBadge> = {
-  amazon: { letter: 'A', color: '#f59e0b' },
-  walmart: { letter: 'W', color: '#3b82f6' },
-  tiktok: { letter: 'T', color: '#6b7280' },
-  shopee: { letter: 'S', color: '#2563eb' },
-  mercadolivre: { letter: 'M', color: '#22c55e' },
-}
-
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: '1',
-    name: 'Premium Wireless Headphones',
-    sku: 'WH-1000XM5-B',
-    totalStock: 42,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.walmart, MARKETPLACE_BADGES.tiktok],
-    lastUpdate: '2 mins ago',
-    status: 'healthy',
-  },
-  {
-    id: '2',
-    name: 'Ergonomic Mechanical Keyboard',
-    sku: 'MK-RGB-87-PRO',
-    totalStock: 8,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.shopee],
-    lastUpdate: '1 hour ago',
-    status: 'low_stock',
-  },
-  {
-    id: '3',
-    name: '4K OLED Professional Monitor',
-    sku: 'MON-4K-27-OLED',
-    totalStock: 15,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.tiktok],
-    lastUpdate: '4 hours ago',
-    status: 'healthy',
-  },
-  {
-    id: '4',
-    name: 'Portable Power Bank 20k mAh',
-    sku: 'PB-20000-USB-C',
-    totalStock: 0,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.walmart, MARKETPLACE_BADGES.shopee],
-    lastUpdate: '12 hours ago',
-    status: 'out_of_stock',
-  },
-  {
-    id: '5',
-    name: 'USB-C Hub 7-in-1 Aluminum',
-    sku: 'HUB-C7-ALU',
-    totalStock: 89,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.shopee],
-    lastUpdate: '1 day ago',
-    status: 'healthy',
-  },
-  {
-    id: '6',
-    name: 'Noise Cancelling Earbuds Pro',
-    sku: 'NC-EARBUDS-PRO',
-    totalStock: 5,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.mercadolivre],
-    lastUpdate: '3 hours ago',
-    status: 'low_stock',
-  },
-  {
-    id: '7',
-    name: 'Smart Watch Ultra Sport',
-    sku: 'SW-ULTRA-SPORT',
-    totalStock: 120,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.walmart, MARKETPLACE_BADGES.shopee],
-    lastUpdate: '30 mins ago',
-    status: 'healthy',
-  },
-  {
-    id: '8',
-    name: 'Wireless Gaming Mouse RGB',
-    sku: 'GM-WIRELESS-RGB',
-    totalStock: 0,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.tiktok],
-    lastUpdate: '2 days ago',
-    status: 'out_of_stock',
-  },
-  {
-    id: '9',
-    name: 'Webcam 4K Auto Focus',
-    sku: 'WC-4K-AF',
-    totalStock: 34,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.mercadolivre, MARKETPLACE_BADGES.shopee],
-    lastUpdate: '5 hours ago',
-    status: 'healthy',
-  },
-  {
-    id: '10',
-    name: 'Laptop Stand Adjustable',
-    sku: 'LS-ADJ-ALUM',
-    totalStock: 3,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.walmart],
-    lastUpdate: '6 hours ago',
-    status: 'low_stock',
-  },
-  {
-    id: '11',
-    name: 'Bluetooth Speaker Waterproof',
-    sku: 'BS-WATER-20W',
-    totalStock: 67,
-    marketplaces: [MARKETPLACE_BADGES.shopee, MARKETPLACE_BADGES.mercadolivre],
-    lastUpdate: '1 day ago',
-    status: 'healthy',
-  },
-  {
-    id: '12',
-    name: 'USB Microphone Condenser',
-    sku: 'MIC-USB-COND',
-    totalStock: 0,
-    marketplaces: [MARKETPLACE_BADGES.amazon, MARKETPLACE_BADGES.walmart, MARKETPLACE_BADGES.tiktok],
-    lastUpdate: '3 days ago',
-    status: 'out_of_stock',
-  },
-]
+const ML_BADGE: MarketplaceBadge = { letter: 'M', color: '#22c55e' }
 
 const ITEMS_PER_PAGE = 5
 
@@ -158,37 +47,142 @@ const STATUS_CONFIG: Record<ProductStatus, { label: string; bg: string; color: s
   out_of_stock: { label: 'Out of Stock', bg: '#fee2e2', color: '#991b1b' },
 }
 
+const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+
+function formatRelative(isoString: string): string {
+  try {
+    const diff = Date.now() - new Date(isoString).getTime()
+    const mins = Math.floor(diff / 60_000)
+    if (mins < 1) return 'agora'
+    if (mins < 60) return `${mins} min atrás`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours}h atrás`
+    const days = Math.floor(hours / 24)
+    return `${days} dia${days > 1 ? 's' : ''} atrás`
+  } catch {
+    return isoString
+  }
+}
+
+function deriveStatus(availableQty: number): ProductStatus {
+  if (availableQty === 0) return 'out_of_stock'
+  if (availableQty < 10) return 'low_stock'
+  return 'healthy'
+}
+
+function toTableRow(p: ProductDto): TableRow {
+  const availableQty = Math.max(0, p.stock - p.reserved_stock)
+  const mlResource = p.resource?.mercado_livre as Record<string, unknown> | undefined
+  const marketplaces: MarketplaceBadge[] =
+    mlResource?.item_id != null ? [ML_BADGE] : []
+
+  return {
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    availableQty,
+    marketplaces,
+    lastUpdate: formatRelative(p.created_at),
+    status: deriveStatus(availableQty),
+  }
+}
+
 export function StockScreen() {
+  const { user } = useAuth()
+  const systemClientId = user?.systemClientId ?? null
+
+  const [products, setProducts] = useState<ProductDto[]>([])
+  const [totalElements, setTotalElements] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
 
-  const handleAddProduct = (data: NewProductData) => {
-    console.log('New product:', data)
+  const mlIntegration = readMercadoLivreIntegration()
+  const mlConnected =
+    mlIntegration != null &&
+    systemClientId != null &&
+    Number(mlIntegration.systemClientId) === Number(systemClientId) &&
+    mlIntegration.active === true
+
+  const fetchProducts = useCallback(async () => {
+    if (systemClientId == null) return
+    setLoading(true)
+    setError(null)
+    try {
+      const page = await listProducts(systemClientId, 0, 200)
+      setProducts(page.content)
+      setTotalElements(page.totalElements)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar produtos.')
+    } finally {
+      setLoading(false)
+    }
+  }, [systemClientId])
+
+  useEffect(() => {
+    void fetchProducts()
+  }, [fetchProducts])
+
+  const handleSyncML = useCallback(async () => {
+    if (systemClientId == null || syncing) return
+    setSyncing(true)
+    setSyncMessage(null)
+    try {
+      const result = await syncMercadoLivreProducts(systemClientId)
+      setSyncMessage(result.message)
+      await fetchProducts()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao sincronizar com o Mercado Livre.')
+    } finally {
+      setSyncing(false)
+    }
+  }, [systemClientId, syncing, fetchProducts])
+
+  const handleAddProduct = (_data: NewProductData) => {
+    console.log('New product:', _data)
     setShowAddModal(false)
   }
 
-  const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return MOCK_PRODUCTS
-    const q = searchQuery.toLowerCase()
-    return MOCK_PRODUCTS.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-    )
-  }, [searchQuery])
+  const handleConnectML = () => {
+    // Navigate user to the Marketplaces screen — for now we can't programmatically switch
+    // screens without a router, so we open a hint. This will be wired when routing is added.
+    window.alert('Acesse a tela "Marketplaces" para conectar sua conta do Mercado Livre.')
+  }
 
-  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
-  const paginatedProducts = useMemo(() => {
+  const rows = useMemo<TableRow[]>(() => products.map(toTableRow), [products])
+
+  const filteredRows = useMemo(() => {
+    if (!searchQuery.trim()) return rows
+    const q = searchQuery.toLowerCase()
+    return rows.filter(
+      (r) => r.name.toLowerCase().includes(q) || r.sku.toLowerCase().includes(q)
+    )
+  }, [rows, searchQuery])
+
+  const totalPages = Math.ceil(filteredRows.length / ITEMS_PER_PAGE)
+  const paginatedRows = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE
-    return filteredProducts.slice(start, start + ITEMS_PER_PAGE)
-  }, [filteredProducts, currentPage])
+    return filteredRows.slice(start, start + ITEMS_PER_PAGE)
+  }, [filteredRows, currentPage])
 
   const summaryStats = useMemo(() => {
-    const totalSkus = MOCK_PRODUCTS.length
-    const lowStock = MOCK_PRODUCTS.filter((p) => p.status === 'low_stock').length
-    const outOfStock = MOCK_PRODUCTS.filter((p) => p.status === 'out_of_stock').length
-    const totalValue = 142500
-    return { totalSkus, lowStock, outOfStock, totalValue }
-  }, [])
+    const lowStock = rows.filter((r) => r.status === 'low_stock').length
+    const outOfStock = rows.filter((r) => r.status === 'out_of_stock').length
+    const totalValue = products.reduce((sum, p) => sum + p.price * p.stock, 0)
+    return { totalSkus: totalElements, lowStock, outOfStock, totalValue }
+  }, [rows, products, totalElements])
+
+  const activeMarketplaceCount = useMemo(() => {
+    const unique = new Set<string>()
+    for (const r of rows) {
+      for (const m of r.marketplaces) unique.add(m.letter)
+    }
+    return unique.size
+  }, [rows])
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
@@ -213,16 +207,9 @@ export function StockScreen() {
 
     const maxVisible = 3
     const pages: (number | 'ellipsis')[] = []
-
-    for (let i = 1; i <= Math.min(maxVisible, totalPages); i++) {
-      pages.push(i)
-    }
-    if (totalPages > maxVisible + 1) {
-      pages.push('ellipsis')
-    }
-    if (totalPages > maxVisible) {
-      pages.push(totalPages)
-    }
+    for (let i = 1; i <= Math.min(maxVisible, totalPages); i++) pages.push(i)
+    if (totalPages > maxVisible + 1) pages.push('ellipsis')
+    if (totalPages > maxVisible) pages.push(totalPages)
 
     for (const page of pages) {
       if (page === 'ellipsis') {
@@ -248,9 +235,12 @@ export function StockScreen() {
       <button
         key="next"
         type="button"
-        style={{ ...styles.pageBtn, ...(currentPage === totalPages ? styles.pageBtnDisabled : {}) }}
+        style={{
+          ...styles.pageBtn,
+          ...(currentPage === totalPages || totalPages === 0 ? styles.pageBtnDisabled : {}),
+        }}
         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-        disabled={currentPage === totalPages}
+        disabled={currentPage === totalPages || totalPages === 0}
         aria-label="Next page"
       >
         <FiChevronRight size={16} />
@@ -259,16 +249,6 @@ export function StockScreen() {
 
     return buttons
   }
-
-  const activeMarketplaceCount = useMemo(() => {
-    const unique = new Set<string>()
-    for (const p of MOCK_PRODUCTS) {
-      for (const m of p.marketplaces) {
-        unique.add(m.letter)
-      }
-    }
-    return unique.size
-  }, [])
 
   return (
     <div style={styles.page}>
@@ -290,8 +270,8 @@ export function StockScreen() {
           </button>
           <div style={styles.userInfo}>
             <div style={styles.userText}>
-              <span style={styles.userName}>Alex Rivera</span>
-              <span style={styles.userRole}>Operations Manager</span>
+              <span style={styles.userName}>{user?.name ?? '—'}</span>
+              <span style={styles.userRole}>OmniSync</span>
             </div>
             <div style={styles.avatar}>
               <FiBox size={18} color="#fff" />
@@ -300,45 +280,82 @@ export function StockScreen() {
         </div>
       </div>
 
+      {/* Error banner */}
+      {error && (
+        <div style={styles.errorBanner} role="alert">
+          <span>{error}</span>
+          <button
+            type="button"
+            style={styles.retryBtn}
+            onClick={() => void fetchProducts()}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {/* Sync message banner */}
+      {syncMessage && !error && (
+        <div style={styles.syncBanner} role="status">
+          <span>{syncMessage}</span>
+          <button
+            type="button"
+            style={styles.dismissBtn}
+            onClick={() => setSyncMessage(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Summary cards */}
       <div style={styles.summaryRow}>
         <div style={styles.summaryCard}>
           <span style={styles.summaryLabel}>TOTAL SKUS</span>
           <div style={styles.summaryBottom}>
-            <span style={styles.summaryValue}>{summaryStats.totalSkus.toLocaleString()}</span>
-            <span style={styles.trendUp}>
-              +2.4%
-              <FiTrendingUp size={14} />
+            <span style={styles.summaryValue}>
+              {loading ? '…' : summaryStats.totalSkus.toLocaleString('pt-BR')}
             </span>
+            <span style={styles.trendNeutral}>produtos ativos</span>
           </div>
         </div>
         <div style={styles.summaryCard}>
           <span style={styles.summaryLabel}>LOW STOCK ALERTS</span>
           <div style={styles.summaryBottom}>
-            <span style={styles.summaryValue}>{summaryStats.lowStock}</span>
-            <span style={styles.trendDown}>
-              -5.1%
-              <FiTrendingDown size={14} />
+            <span style={styles.summaryValue}>
+              {loading ? '…' : summaryStats.lowStock}
             </span>
+            {summaryStats.lowStock > 0 ? (
+              <span style={styles.trendDown}>
+                <FiTrendingDown size={14} />
+                atenção
+              </span>
+            ) : (
+              <span style={styles.trendUp}>
+                <FiTrendingUp size={14} />
+                ok
+              </span>
+            )}
           </div>
         </div>
         <div style={styles.summaryCard}>
           <span style={styles.summaryLabel}>OUT OF STOCK</span>
           <div style={styles.summaryBottom}>
-            <span style={styles.summaryValue}>{summaryStats.outOfStock}</span>
-            <span style={styles.trendNeutral}>No change</span>
+            <span style={styles.summaryValue}>
+              {loading ? '…' : summaryStats.outOfStock}
+            </span>
+            <span style={styles.trendNeutral}>
+              {summaryStats.outOfStock === 0 ? 'Nenhum' : 'repor estoque'}
+            </span>
           </div>
         </div>
         <div style={styles.summaryCard}>
-          <span style={styles.summaryLabel}>TOTAL VALUE</span>
+          <span style={styles.summaryLabel}>VALOR EM ESTOQUE</span>
           <div style={styles.summaryBottom}>
             <span style={styles.summaryValue}>
-              ${summaryStats.totalValue.toLocaleString()}
+              {loading ? '…' : BRL.format(summaryStats.totalValue)}
             </span>
-            <span style={styles.trendUp}>
-              +12%
-              <FiTrendingUp size={14} />
-            </span>
+            <span style={styles.trendNeutral}>estimado</span>
           </div>
         </div>
       </div>
@@ -348,7 +365,9 @@ export function StockScreen() {
         <div>
           <h2 style={styles.sectionTitle}>Inventory Overview</h2>
           <p style={styles.sectionSubtitle}>
-            Manage stock across {activeMarketplaceCount} active marketplaces
+            {activeMarketplaceCount > 0
+              ? `Gerenciando estoque em ${activeMarketplaceCount} marketplace${activeMarketplaceCount > 1 ? 's' : ''} ativo${activeMarketplaceCount > 1 ? 's' : ''}`
+              : 'Gerencie seu estoque sincronizado'}
           </p>
         </div>
         <div style={styles.sectionActions}>
@@ -360,6 +379,28 @@ export function StockScreen() {
             <FiDownload size={16} />
             Export CSV
           </button>
+          <button
+            type="button"
+            style={{
+              ...styles.syncBtn,
+              ...(!mlConnected || syncing ? styles.syncBtnDisabled : {}),
+            }}
+            onClick={handleSyncML}
+            disabled={!mlConnected || syncing}
+            title={
+              !mlConnected
+                ? 'Conecte o Mercado Livre para sincronizar'
+                : syncing
+                  ? 'Sincronizando…'
+                  : 'Sincronizar anúncios do Mercado Livre'
+            }
+          >
+            <FiRefreshCw
+              size={16}
+              style={syncing ? styles.spinIcon : undefined}
+            />
+            {syncing ? 'Sincronizando…' : 'Sync ML'}
+          </button>
           <button type="button" style={styles.addProductBtn} onClick={() => setShowAddModal(true)}>
             <FiPlus size={18} />
             Add Product
@@ -367,87 +408,119 @@ export function StockScreen() {
         </div>
       </div>
 
-      {/* Products table */}
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={{ ...styles.th, ...styles.thFirst }}>PRODUCT NAME</th>
-              <th style={styles.th}>SKU</th>
-              <th style={styles.th}>TOTAL STOCK</th>
-              <th style={styles.th}>LINKED MARKETPLACES</th>
-              <th style={styles.th}>LAST UPDATE</th>
-              <th style={{ ...styles.th, ...styles.thLast }}>STATUS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedProducts.map((product) => {
-              const statusCfg = STATUS_CONFIG[product.status]
-              return (
-                <tr key={product.id} style={styles.tr}>
-                  <td style={{ ...styles.td, ...styles.tdFirst }}>
-                    <div style={styles.productNameCell}>
-                      <div style={styles.productIcon}>
-                        <FiImage size={18} color="#9ca3af" />
-                      </div>
-                      <span style={styles.productName}>{product.name}</span>
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.skuText}>{product.sku}</span>
-                  </td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        ...styles.stockText,
-                        color: product.totalStock === 0 ? '#dc2626' : product.totalStock < 10 ? '#d97706' : '#111827',
-                      }}
-                    >
-                      {product.totalStock} units
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={styles.badgesWrap}>
-                      {product.marketplaces.map((m, i) => (
-                        <span
-                          key={`${product.id}-${m.letter}-${i}`}
-                          style={{ ...styles.marketplaceBadge, backgroundColor: m.color }}
-                        >
-                          {m.letter}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.lastUpdateText}>{product.lastUpdate}</span>
-                  </td>
-                  <td style={{ ...styles.td, ...styles.tdLast }}>
-                    <span
-                      style={{
-                        ...styles.statusBadge,
-                        backgroundColor: statusCfg.bg,
-                        color: statusCfg.color,
-                      }}
-                    >
-                      {statusCfg.label}
-                    </span>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* Loading spinner */}
+      {loading && (
+        <div style={styles.loadingWrap}>
+          <div style={styles.spinner} aria-label="Carregando produtos" />
+          <span style={styles.loadingText}>Carregando produtos…</span>
+        </div>
+      )}
 
-      {/* Pagination */}
-      <div style={styles.pagination}>
-        <span style={styles.paginationInfo}>
-          Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
-          {Math.min(currentPage * ITEMS_PER_PAGE, filteredProducts.length)} of{' '}
-          {filteredProducts.length} results
-        </span>
-        <div style={styles.paginationBtns}>{renderPaginationButtons()}</div>
-      </div>
+      {/* Empty state */}
+      {!loading && !error && totalElements === 0 && (
+        <StockEmptyState
+          mlConnected={mlConnected}
+          syncing={syncing}
+          onSyncML={handleSyncML}
+          onConnectML={handleConnectML}
+          onAddManual={() => setShowAddModal(true)}
+        />
+      )}
+
+      {/* Products table */}
+      {!loading && totalElements > 0 && (
+        <>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={{ ...styles.th, ...styles.thFirst }}>PRODUCT NAME</th>
+                  <th style={styles.th}>SKU</th>
+                  <th style={styles.th}>QTD DISPONÍVEL</th>
+                  <th style={styles.th}>MARKETPLACES</th>
+                  <th style={styles.th}>ADICIONADO</th>
+                  <th style={{ ...styles.th, ...styles.thLast }}>STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedRows.map((row) => {
+                  const statusCfg = STATUS_CONFIG[row.status]
+                  return (
+                    <tr key={row.id} style={styles.tr}>
+                      <td style={{ ...styles.td, ...styles.tdFirst }}>
+                        <div style={styles.productNameCell}>
+                          <div style={styles.productIcon}>
+                            <FiImage size={18} color="#9ca3af" />
+                          </div>
+                          <span style={styles.productName}>{row.name}</span>
+                        </div>
+                      </td>
+                      <td style={styles.td}>
+                        <span style={styles.skuText}>{row.sku}</span>
+                      </td>
+                      <td style={styles.td}>
+                        <span
+                          style={{
+                            ...styles.stockText,
+                            color:
+                              row.availableQty === 0
+                                ? '#dc2626'
+                                : row.availableQty < 10
+                                  ? '#d97706'
+                                  : '#111827',
+                          }}
+                        >
+                          {row.availableQty} units
+                        </span>
+                      </td>
+                      <td style={styles.td}>
+                        <div style={styles.badgesWrap}>
+                          {row.marketplaces.length > 0 ? (
+                            row.marketplaces.map((m, i) => (
+                              <span
+                                key={`${row.id}-${m.letter}-${i}`}
+                                style={{ ...styles.marketplaceBadge, backgroundColor: m.color }}
+                              >
+                                {m.letter}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={styles.noBadgeText}>—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={styles.td}>
+                        <span style={styles.lastUpdateText}>{row.lastUpdate}</span>
+                      </td>
+                      <td style={{ ...styles.td, ...styles.tdLast }}>
+                        <span
+                          style={{
+                            ...styles.statusBadge,
+                            backgroundColor: statusCfg.bg,
+                            color: statusCfg.color,
+                          }}
+                        >
+                          {statusCfg.label}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div style={styles.pagination}>
+            <span style={styles.paginationInfo}>
+              Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
+              {Math.min(currentPage * ITEMS_PER_PAGE, filteredRows.length)} of{' '}
+              {filteredRows.length} results
+            </span>
+            <div style={styles.paginationBtns}>{renderPaginationButtons()}</div>
+          </div>
+        </>
+      )}
 
       <AddProductModal
         open={showAddModal}
@@ -544,6 +617,56 @@ const styles = {
     justifyContent: 'center',
   },
 
+  /* Banners */
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    borderRadius: '10px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#991b1b',
+    fontSize: '14px',
+  },
+  retryBtn: {
+    padding: '6px 14px',
+    borderRadius: '8px',
+    border: '1px solid #fca5a5',
+    backgroundColor: '#ffffff',
+    color: '#991b1b',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  syncBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    borderRadius: '10px',
+    backgroundColor: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    color: '#166534',
+    fontSize: '14px',
+  },
+  dismissBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#166534',
+    fontSize: '14px',
+    fontWeight: 700,
+    padding: '0 4px',
+    flexShrink: 0,
+  },
+
   /* Summary cards */
   summaryRow: {
     display: 'grid',
@@ -570,6 +693,7 @@ const styles = {
     display: 'flex',
     alignItems: 'baseline',
     gap: '10px',
+    flexWrap: 'wrap' as const,
   },
   summaryValue: {
     fontSize: '28px',
@@ -621,6 +745,7 @@ const styles = {
   sectionActions: {
     display: 'flex',
     gap: '10px',
+    flexWrap: 'wrap' as const,
   },
   filterBtn: {
     display: 'inline-flex',
@@ -650,6 +775,24 @@ const styles = {
     color: '#374151',
     cursor: 'pointer',
   },
+  syncBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 18px',
+    borderRadius: '10px',
+    border: 'none',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#333333',
+    backgroundColor: '#ffe600',
+    cursor: 'pointer',
+  },
+  syncBtnDisabled: {
+    opacity: 0.5,
+    cursor: 'default' as const,
+  },
   addProductBtn: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -663,6 +806,31 @@ const styles = {
     color: '#ffffff',
     backgroundColor: '#2563eb',
     cursor: 'pointer',
+  },
+  spinIcon: {
+    animation: 'spin 0.8s linear infinite',
+  },
+
+  /* Loading */
+  loadingWrap: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '64px 0',
+    gap: '16px',
+  },
+  spinner: {
+    width: '40px',
+    height: '40px',
+    border: '4px solid #e5e7eb',
+    borderTopColor: '#2563eb',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+  },
+  loadingText: {
+    fontSize: '14px',
+    color: '#6b7280',
   },
 
   /* Table */
@@ -689,26 +857,16 @@ const styles = {
     backgroundColor: '#fafafa',
     whiteSpace: 'nowrap' as const,
   },
-  thFirst: {
-    paddingLeft: '24px',
-  },
-  thLast: {
-    paddingRight: '24px',
-  },
-  tr: {
-    borderBottom: '1px solid #f3f4f6',
-  },
+  thFirst: { paddingLeft: '24px' },
+  thLast: { paddingRight: '24px' },
+  tr: { borderBottom: '1px solid #f3f4f6' },
   td: {
     padding: '16px 16px',
     fontSize: '14px',
     verticalAlign: 'middle' as const,
   },
-  tdFirst: {
-    paddingLeft: '24px',
-  },
-  tdLast: {
-    paddingRight: '24px',
-  },
+  tdFirst: { paddingLeft: '24px' },
+  tdLast: { paddingRight: '24px' },
 
   /* Product name cell */
   productNameCell: {
@@ -731,7 +889,6 @@ const styles = {
     fontWeight: 600,
     color: '#111827',
   },
-
   skuText: {
     fontSize: '13px',
     fontWeight: 500,
@@ -762,6 +919,10 @@ const styles = {
     fontSize: '11px',
     fontWeight: 700,
     color: '#ffffff',
+  },
+  noBadgeText: {
+    fontSize: '13px',
+    color: '#9ca3af',
   },
 
   /* Status badge */

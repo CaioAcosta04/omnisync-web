@@ -14,6 +14,10 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Sidebar: item ativo (Dashboard) – fundo e texto roxo */
 .ps-menuitem-root.ps-active .ps-menu-button {
   background-color: #ede9fe !important;
