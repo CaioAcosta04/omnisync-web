@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { FiLink2, FiPlus } from 'react-icons/fi'
+import { FiLink2, FiLock, FiPlus } from 'react-icons/fi'
 
 export type MarketplaceCardData = {
   id: string
@@ -9,6 +9,8 @@ export type MarketplaceCardData = {
   connected: boolean
   integrationActive: boolean
   lastSyncLabel: string
+  /** Card marcado como "Em breve" — não permite interação */
+  disabled?: boolean
 }
 
 type MarketplaceCardProps = {
@@ -24,12 +26,30 @@ export function MarketplaceCard({
   onDisconnect,
   onConnect,
 }: MarketplaceCardProps) {
-  const { name, apiType, icon, connected, integrationActive, lastSyncLabel } =
+  const { name, apiType, icon, connected, integrationActive, lastSyncLabel, disabled } =
     marketplace
 
   return (
-    <article style={styles.card}>
-      <div style={styles.iconWrap}>{icon}</div>
+    <article
+      style={{
+        ...styles.card,
+        ...(disabled ? styles.cardDisabled : {}),
+      }}
+    >
+      {disabled && (
+        <div style={styles.comingSoonRibbon} aria-hidden="true">
+          <span style={styles.comingSoonRibbonText}>EM BREVE</span>
+        </div>
+      )}
+
+      <div
+        style={{
+          ...styles.iconWrap,
+          ...(disabled ? styles.iconWrapDisabled : {}),
+        }}
+      >
+        {icon}
+      </div>
 
       <div style={styles.body}>
         <div style={styles.bodyHeader}>
@@ -37,51 +57,67 @@ export function MarketplaceCard({
             <p style={styles.apiType}>{apiType}</p>
             <h2 style={styles.name}>{name}</h2>
           </div>
-          <span
-            style={{
-              ...styles.stateBadge,
-              ...(integrationActive ? styles.stateBadgeActive : styles.stateBadgeInactive),
-            }}
-          >
-            {integrationActive ? 'ACTIVE' : 'INACTIVE'}
-          </span>
+
+          {disabled ? (
+            <span style={{ ...styles.stateBadge, ...styles.stateBadgeComingSoon }}>
+              <FiLock size={10} strokeWidth={2.5} />
+              EM BREVE
+            </span>
+          ) : (
+            <span
+              style={{
+                ...styles.stateBadge,
+                ...(integrationActive ? styles.stateBadgeActive : styles.stateBadgeInactive),
+              }}
+            >
+              {integrationActive ? 'ATIVO' : 'INATIVO'}
+            </span>
+          )}
         </div>
 
         <div style={styles.metaGrid}>
           <div>
             <p style={styles.metaLabel}>STATUS</p>
-            <p style={styles.metaValue}>
-              {connected ? 'Connected' : 'Not connected'}
+            <p style={{ ...styles.metaValue, ...(disabled ? styles.metaValueDisabled : {}) }}>
+              {disabled ? 'Em breve' : connected ? 'Conectado' : 'Não conectado'}
             </p>
           </div>
           <div>
-            <p style={styles.metaLabel}>LAST SYNC</p>
-            <p style={styles.metaValue}>{lastSyncLabel}</p>
+            <p style={styles.metaLabel}>ÚLTIMA SINCRONIZAÇÃO</p>
+            <p style={{ ...styles.metaValue, ...(disabled ? styles.metaValueDisabled : {}) }}>
+              {disabled ? '—' : lastSyncLabel}
+            </p>
           </div>
         </div>
 
-        <div style={styles.actions}>
-          {connected ? (
-            <>
-              <button type="button" style={styles.btnPrimary} onClick={onManage}>
-                Manage Connection
+        {!disabled && (
+          <div style={styles.actions}>
+            {connected ? (
+              <>
+                <button
+                  type="button"
+                  style={styles.btnPrimary}
+                  onClick={() => onManage?.()}
+                >
+                  Gerenciar Conexão
+                </button>
+                <button
+                  type="button"
+                  style={styles.btnIcon}
+                  aria-label="Desconectar marketplace"
+                  onClick={() => onDisconnect?.()}
+                >
+                  <FiLink2 size={18} />
+                </button>
+              </>
+            ) : (
+              <button type="button" style={styles.btnConnect} onClick={() => onConnect?.()}>
+                <FiPlus size={18} />
+                Conectar Marketplace
               </button>
-              <button
-                type="button"
-                style={styles.btnIcon}
-                aria-label="Disconnect marketplace"
-                onClick={onDisconnect}
-              >
-                <FiLink2 size={18} />
-              </button>
-            </>
-          ) : (
-            <button type="button" style={styles.btnConnect} onClick={onConnect}>
-              <FiPlus size={18} />
-              Connect Marketplace
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </article>
   )
@@ -89,6 +125,7 @@ export function MarketplaceCard({
 
 const styles = {
   card: {
+    position: 'relative' as const,
     display: 'flex',
     gap: '20px',
     padding: '20px 22px',
@@ -96,6 +133,35 @@ const styles = {
     border: '1px solid #e5e7eb',
     borderRadius: '14px',
     boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+    overflow: 'hidden',
+  },
+  cardDisabled: {
+    backgroundColor: '#f9fafb',
+    border: '1px dashed #d1d5db',
+    boxShadow: 'none',
+    opacity: 0.75,
+  },
+  /** Faixa diagonal "EM BREVE" no canto superior direito */
+  comingSoonRibbon: {
+    position: 'absolute' as const,
+    top: '12px',
+    right: '-28px',
+    width: '110px',
+    backgroundColor: '#fef3c7',
+    transform: 'rotate(30deg)',
+    transformOrigin: 'center',
+    padding: '3px 0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'none' as const,
+    zIndex: 1,
+  },
+  comingSoonRibbonText: {
+    fontSize: '9px',
+    fontWeight: 800,
+    letterSpacing: '0.06em',
+    color: '#92400e',
   },
   iconWrap: {
     flexShrink: 0,
@@ -107,6 +173,10 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     color: '#6d28d9',
+  },
+  iconWrapDisabled: {
+    background: '#f3f4f6',
+    color: '#9ca3af',
   },
   body: {
     flex: 1,
@@ -135,12 +205,16 @@ const styles = {
     lineHeight: 1.2,
   },
   stateBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
     fontSize: '10px',
     fontWeight: 700,
     letterSpacing: '0.04em',
     padding: '4px 10px',
     borderRadius: '999px',
     whiteSpace: 'nowrap' as const,
+    flexShrink: 0,
   },
   stateBadgeActive: {
     backgroundColor: '#dcfce7',
@@ -149,6 +223,12 @@ const styles = {
   stateBadgeInactive: {
     backgroundColor: '#f3f4f6',
     color: '#6b7280',
+  },
+  /** Âmbar — completamente diferente de INATIVO (cinza) */
+  stateBadgeComingSoon: {
+    backgroundColor: '#fef3c7',
+    color: '#92400e',
+    border: '1px solid #fde68a',
   },
   metaGrid: {
     display: 'grid',
@@ -167,6 +247,9 @@ const styles = {
     fontSize: '14px',
     fontWeight: 600,
     color: '#374151',
+  },
+  metaValueDisabled: {
+    color: '#9ca3af',
   },
   actions: {
     display: 'flex',

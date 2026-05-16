@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { apiFetch } from '../lib/apiFetch'
+import { clearMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
 import type { UserMe } from '../types/auth'
 
 const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
@@ -69,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         /* rede / servidor indisponível — ainda assim limpamos o estado local */
       }
     }
+    clearMercadoLivreIntegration()
     setUser(null)
   }, [])
 
