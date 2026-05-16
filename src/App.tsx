@@ -11,6 +11,7 @@ import {
 import { AppSidebar } from './components/AppSidebar'
 import { AppTopbar, type AppTopbarVariant } from './components/AppTopbar/AppTopbar'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { MercadoLivreOAuthProvider } from './contexts/MercadoLivreOAuthContext'
 import {
   UserAuthNavigationProvider,
   type UserAuthScreenLabel,
@@ -27,6 +28,12 @@ import {
 import { UserCreateAccount } from './screens/user/userCreateAccount/UserCreateAccount'
 import { UserLoginAccount } from './screens/user/userLogin/UserLoginAccount'
 import { UserChangePassword } from './screens/user/userChangePassword/UserChangePassword'
+import { MercadoLivreOAuthModal } from './components/MercadoLivreOAuthModal'
+import { MercadoLivreDebugPanel } from './components/MercadoLivreDebugPanel'
+
+const ML_DEBUG_ENABLED =
+  import.meta.env.DEV ||
+  (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug'))
 
 const USER_AUTH_TOPBAR_VARIANT: Record<UserAuthScreenLabel, AppTopbarVariant> = {
   CreateAccount: 'create',
@@ -70,6 +77,7 @@ function AppShell() {
   }, [authLogout])
 
   const isAuthenticated = user !== null
+
   const AuthScreen = AUTH_SCREENS[authScreen]
   const authTopbarVariant = USER_AUTH_TOPBAR_VARIANT[authScreen]
 
@@ -86,10 +94,7 @@ function AppShell() {
   }
 
   return (
-    <UserAuthNavigationProvider
-      onNavigate={handleAuthNavigate}
-      onLogout={handleLogout}
-    >
+    <UserAuthNavigationProvider onNavigate={handleAuthNavigate} onLogout={handleLogout}>
       {!isAuthenticated ? (
         <div style={styles.authLayout}>
           <AppTopbar variant={authTopbarVariant} />
@@ -120,7 +125,11 @@ function AppShell() {
 function App() {
   return (
     <AuthProvider>
-      <AppShell />
+      <MercadoLivreOAuthProvider>
+        <AppShell />
+        <MercadoLivreOAuthModal />
+        {ML_DEBUG_ENABLED && <MercadoLivreDebugPanel />}
+      </MercadoLivreOAuthProvider>
     </AuthProvider>
   )
 }
