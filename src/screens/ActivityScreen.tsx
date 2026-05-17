@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  FiAlertCircle,
   FiAlertTriangle,
   FiCheckCircle,
   FiChevronDown,
@@ -13,9 +14,18 @@ import {
   FiShoppingCart,
   FiTrendingUp,
 } from 'react-icons/fi'
+import { ActivityEmptyState } from '../components/ActivityEmptyState'
+import { useAppNavigation } from '../contexts/AppNavigationContext'
+import { useAuth } from '../contexts/AuthContext'
+import { formatRelative } from '../lib/relativeTime'
+import { listProducts } from '../services/productsApi'
+import { getSaleById, listSales } from '../services/salesApi'
+import type { SaleChannel, SaleDto } from '../types/sale'
 
+// ─── Domain types ────────────────────────────────────────────────────────────
+
+type DayBucket = 'today' | 'yesterday' | 'older'
 type TimeFilter = 'all' | 'today' | '7d'
-
 type EventType = 'order' | 'low_stock' | 'listing_sync' | 'return' | 'bulk_update'
 
 type ActivityEvent = {
@@ -24,7 +34,8 @@ type ActivityEvent = {
   title: string
   description: string
   time: string
-  day: 'today' | 'yesterday'
+  day: DayBucket
+  isoDate: string
   badge?: { label: string; bg: string; color: string }
   actionBtn?: { label: string }
   price?: { amount: string; status: string }
@@ -36,6 +47,8 @@ type ActivityEvent = {
   highlightedName?: string
   source?: string
 }
+
+// ─── Static config ────────────────────────────────────────────────────────────
 
 const EVENT_STYLE: Record<EventType, { borderColor: string; iconBg: string; iconColor: string }> = {
   order: { borderColor: '#22c55e', iconBg: '#dcfce7', iconColor: '#16a34a' },
@@ -53,86 +66,214 @@ const EVENT_ICONS: Record<EventType, React.ReactNode> = {
   bulk_update: <FiClipboard size={20} />,
 }
 
-const MOCK_EVENTS: ActivityEvent[] = [
-  {
-    id: '1',
-    type: 'order',
-    title: 'New Order #8841-A',
-    description: 'Customer placed an order for',
-    linkedText: 'CloudPulse Headphones (Arctic White)',
-    time: '2 mins ago',
-    day: 'today',
-    source: 'Shopify',
-    price: { amount: '$249.00', status: 'Paid' },
-  },
-  {
-    id: '2',
-    type: 'low_stock',
-    title: 'Low Stock Warning',
-    description: 'Inventory for',
-    highlightedName: 'NeoGrip Wireless Mouse',
-    time: '14 mins ago',
-    day: 'today',
-    actionBtn: { label: 'Restock' },
-    badge: { label: 'Action Required', bg: 'transparent', color: '#d97706' },
-    progressBar: { percent: 25, color: '#f59e0b' },
-  },
-  {
-    id: '3',
-    type: 'listing_sync',
-    title: 'Listing Synced',
-    description: 'Updated price and description for',
-    highlightedName: 'Titanium Smartwatch V2',
-    linkedText: '3 marketplaces',
-    time: '42 mins ago',
-    day: 'today',
-    marketplaceBadges: [
-      { letter: 'A', color: '#f59e0b' },
-      { letter: 'S', color: '#22c55e' },
-      { letter: 'E', color: '#8b5cf6' },
-    ],
-    marketplaceNames: 'Amazon, Shopify, eBay',
-  },
-  {
-    id: '4',
-    type: 'return',
-    title: 'Return Requested',
-    description: 'RMA request for Pro-Series Mechanical Keyboard.\nReason: "Defective switch".',
-    time: '18h ago',
-    day: 'yesterday',
-    source: 'Amazon',
-    actionBtn: { label: 'View Case' },
-    badge: { label: 'High Priority', bg: '#fee2e2', color: '#dc2626' },
-  },
-  {
-    id: '5',
-    type: 'bulk_update',
-    title: 'Bulk Inventory Update',
-    description: 'Successfully updated stock levels for',
-    highlightedName: '124 items',
-    time: '22h ago',
-    day: 'yesterday',
-    successLabel: '100% Successful',
-  },
-]
-
 const HEALTH_ITEMS = [
   { name: 'Amazon', color: '#f59e0b', status: '#22c55e' },
   { name: 'Shopify', color: '#22c55e', status: '#22c55e' },
   { name: 'eBay', color: '#a3e635', status: '#f59e0b' },
 ]
 
+const CHANNEL_DISPLAY: Record<SaleChannel, { label: string; letter: string; color: string }> = {
+  MERCADO_LIVRE: { label: 'Mercado Livre', letter: 'M', color: '#ffe600' },
+  SHOPEE: { label: 'Shopee', letter: 'S', color: '#f97316' },
+  AMAZON: { label: 'Amazon', letter: 'A', color: '#f59e0b' },
+  PHYSICAL: { label: 'Physical', letter: 'P', color: '#9ca3af' },
+  MANUAL: { label: 'Manual', letter: 'm', color: '#8b5cf6' },
+}
+
+const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+
+const PAGE_SIZE = 50
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getDayBucket(isoString: string): DayBucket {
+  const now = new Date()
+  const date = new Date(isoString)
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterdayStart = new Date(todayStart.getTime() - 86_400_000)
+  if (date >= todayStart) return 'today'
+  if (date >= yesterdayStart) return 'yesterday'
+  return 'older'
+}
+
+function getDaysDiff(isoString: string): number {
+  const diff = Date.now() - new Date(isoString).getTime()
+  return Math.floor(diff / 86_400_000)
+}
+
+function saleToEvents(
+  sale: SaleDto,
+  productNamesById: Record<number, string>,
+): ActivityEvent[] {
+  const events: ActivityEvent[] = []
+  const ch = CHANNEL_DISPLAY[sale.channel] ?? { label: sale.channel, letter: '?', color: '#9ca3af' }
+  const productName = productNamesById[sale.product_id] ?? `Product #${sale.product_id}`
+  const isCancelled = sale.status === 'CANCELLED'
+  const day = getDayBucket(sale.created_at)
+
+  const mainEvent: ActivityEvent = {
+    id: `sale-${sale.id}`,
+    type: isCancelled ? 'return' : 'order',
+    title: isCancelled ? `Sale Cancelled #${sale.id}` : `New Order #${sale.id}`,
+    description: isCancelled ? 'Order was cancelled for' : 'Customer placed an order for',
+    linkedText: productName,
+    time: formatRelative(sale.created_at),
+    isoDate: sale.created_at,
+    day,
+    source: ch.label,
+    price: {
+      amount: BRL.format(Number(sale.total_value)),
+      status: isCancelled ? 'Cancelled' : 'Paid',
+    },
+    marketplaceBadges: [{ letter: ch.letter, color: ch.color }],
+    marketplaceNames: ch.label,
+  }
+  events.push(mainEvent)
+
+  if (sale.logs) {
+    for (const log of sale.logs) {
+      const logDay = getDayBucket(log.created_at)
+      const statusChanged =
+        log.previous_status != null &&
+        log.new_status != null &&
+        log.previous_status !== log.new_status
+
+      const logEvent: ActivityEvent = {
+        id: `log-${log.id}`,
+        type: log.new_status === 'CANCELLED' ? 'return' : 'listing_sync',
+        title: log.action,
+        description: statusChanged
+          ? `Status: ${log.previous_status ?? '—'} → ${log.new_status ?? '—'}`
+          : `Sale #${sale.id} updated`,
+        time: formatRelative(log.created_at),
+        isoDate: log.created_at,
+        day: logDay,
+        source: ch.label,
+      }
+      events.push(logEvent)
+    }
+  }
+
+  return events
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export function ActivityScreen() {
+  const { user } = useAuth()
+  const { navigateTo } = useAppNavigation()
+  const systemClientId = user?.systemClientId ?? null
+
+  const [sales, setSales] = useState<SaleDto[]>([])
+  const [productNames, setProductNames] = useState<Record<number, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [totalElements, setTotalElements] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
 
+  const fetchActivity = useCallback(async () => {
+    if (systemClientId == null) return
+    setLoading(true)
+    setError(null)
+    try {
+      const page = await listSales(systemClientId, 0, PAGE_SIZE)
+      setTotalElements(page.totalElements)
+
+      if (page.content.length === 0) {
+        setSales([])
+        return
+      }
+
+      const [detailed, productsPage] = await Promise.all([
+        Promise.all(page.content.map((s) => getSaleById(systemClientId, s.id))),
+        listProducts(systemClientId, 0, 200),
+      ])
+
+      setSales(detailed)
+      setProductNames(
+        Object.fromEntries(productsPage.content.map((p) => [p.id, p.name])),
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar atividade.')
+    } finally {
+      setLoading(false)
+    }
+  }, [systemClientId])
+
+  const handleLoadMore = useCallback(async () => {
+    if (systemClientId == null || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const page = await listSales(systemClientId, sales.length, PAGE_SIZE)
+
+      if (page.content.length === 0) return
+
+      const [detailed, productsPage] = await Promise.all([
+        Promise.all(page.content.map((s) => getSaleById(systemClientId, s.id))),
+        listProducts(systemClientId, 0, 200),
+      ])
+
+      setSales((prev) => [...prev, ...detailed])
+      setProductNames((prev) => ({
+        ...prev,
+        ...Object.fromEntries(productsPage.content.map((p) => [p.id, p.name])),
+      }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar mais atividade.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [systemClientId, sales.length, loadingMore])
+
+  const handleSync = useCallback(async () => {
+    if (systemClientId == null || syncing || loading) return
+    setSyncing(true)
+    setError(null)
+    try {
+      const page = await listSales(systemClientId, 0, PAGE_SIZE)
+      setTotalElements(page.totalElements)
+
+      if (page.content.length === 0) {
+        setSales([])
+        return
+      }
+
+      const [detailed, productsPage] = await Promise.all([
+        Promise.all(page.content.map((s) => getSaleById(systemClientId, s.id))),
+        listProducts(systemClientId, 0, 200),
+      ])
+
+      setSales(detailed)
+      setProductNames(
+        Object.fromEntries(productsPage.content.map((p) => [p.id, p.name])),
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao sincronizar atividade.')
+    } finally {
+      setSyncing(false)
+    }
+  }, [systemClientId, syncing, loading])
+
+  useEffect(() => {
+    void fetchActivity()
+  }, [fetchActivity])
+
+  const allEvents = useMemo<ActivityEvent[]>(() => {
+    const events = sales.flatMap((sale) => saleToEvents(sale, productNames))
+    events.sort((a, b) => new Date(b.isoDate).getTime() - new Date(a.isoDate).getTime())
+    return events
+  }, [sales, productNames])
+
   const filteredEvents = useMemo(() => {
-    let events = MOCK_EVENTS
+    let events = allEvents
 
     if (timeFilter === 'today') {
       events = events.filter((e) => e.day === 'today')
     } else if (timeFilter === '7d') {
-      events = events.filter((e) => e.day === 'today' || e.day === 'yesterday')
+      events = events.filter((e) => getDaysDiff(e.isoDate) <= 7)
     }
 
     if (searchQuery.trim()) {
@@ -141,15 +282,19 @@ export function ActivityScreen() {
         (e) =>
           e.title.toLowerCase().includes(q) ||
           e.description.toLowerCase().includes(q) ||
-          (e.highlightedName && e.highlightedName.toLowerCase().includes(q))
+          (e.linkedText && e.linkedText.toLowerCase().includes(q)) ||
+          (e.source && e.source.toLowerCase().includes(q)),
       )
     }
 
     return events
-  }, [searchQuery, timeFilter])
+  }, [allEvents, searchQuery, timeFilter])
 
   const todayEvents = filteredEvents.filter((e) => e.day === 'today')
   const yesterdayEvents = filteredEvents.filter((e) => e.day === 'yesterday')
+  const olderEvents = filteredEvents.filter((e) => e.day === 'older')
+
+  const hasMore = sales.length < totalElements
 
   const renderEventCard = (event: ActivityEvent) => {
     const cfg = EVENT_STYLE[event.type]
@@ -183,21 +328,20 @@ export function ActivityScreen() {
             {event.linkedText && (
               <span style={styles.link}> {event.linkedText}</span>
             )}
-            {event.description.includes('dropped') || (!event.highlightedName && !event.linkedText)
-              ? '.'
-              : event.highlightedName && !event.linkedText
-                ? event.type === 'low_stock'
-                  ? ' dropped below threshold (5 left).'
-                  : event.type === 'bulk_update'
-                    ? ' from Warehouse Master.'
-                    : ` across ${event.linkedText}.`
-                : '.'}
           </p>
 
           {event.price && (
             <div style={styles.priceRow}>
               <span style={styles.priceAmount}>{event.price.amount}</span>
-              <span style={styles.pricePaid}>{event.price.status}</span>
+              <span
+                style={{
+                  ...styles.pricePaid,
+                  backgroundColor: event.price.status === 'Cancelled' ? '#fee2e2' : '#dcfce7',
+                  color: event.price.status === 'Cancelled' ? '#991b1b' : '#166534',
+                }}
+              >
+                {event.price.status}
+              </span>
             </div>
           )}
 
@@ -231,7 +375,11 @@ export function ActivityScreen() {
                 {event.marketplaceBadges.map((b, i) => (
                   <span
                     key={`${event.id}-${b.letter}-${i}`}
-                    style={{ ...styles.mpBadge, backgroundColor: b.color }}
+                    style={{
+                      ...styles.mpBadge,
+                      backgroundColor: b.color,
+                      color: b.color === '#ffe600' ? '#333333' : '#ffffff',
+                    }}
                   >
                     {b.letter}
                   </span>
@@ -277,6 +425,20 @@ export function ActivityScreen() {
                 style={styles.searchInput}
               />
             </div>
+            <button
+              type="button"
+              style={styles.iconBtn}
+              aria-label="Sincronizar atividades"
+              onClick={() => void handleSync()}
+              disabled={syncing || loading}
+              title="Sincronizar atividades"
+            >
+              <FiRefreshCw
+                size={18}
+                color={syncing ? '#4f46e5' : '#6b7280'}
+                style={syncing ? styles.spinIcon : undefined}
+              />
+            </button>
             <button type="button" style={styles.iconBtn} aria-label="View logs">
               <FiFileText size={18} color="#6b7280" />
             </button>
@@ -322,37 +484,88 @@ export function ActivityScreen() {
           </button>
         </div>
 
-        {/* Today */}
-        {todayEvents.length > 0 && (
-          <>
-            <div style={styles.dayDivider}>
-              <span style={styles.dayLabel}>TODAY</span>
-              <div style={styles.dayLine} />
-            </div>
-            <div style={styles.eventList}>
-              {todayEvents.map(renderEventCard)}
-            </div>
-          </>
+        {/* Loading */}
+        {loading && (
+          <div style={styles.loadingWrap}>
+            <div style={styles.spinner} aria-label="Carregando atividade" />
+            <span style={styles.loadingText}>Carregando atividade…</span>
+          </div>
         )}
 
-        {/* Yesterday */}
-        {yesterdayEvents.length > 0 && (
-          <>
-            <div style={styles.dayDivider}>
-              <span style={styles.dayLabel}>YESTERDAY</span>
-              <div style={styles.dayLine} />
-            </div>
-            <div style={styles.eventList}>
-              {yesterdayEvents.map(renderEventCard)}
-            </div>
-          </>
+        {/* Error */}
+        {!loading && error && (
+          <div style={styles.errorBanner} role="alert">
+            <FiAlertCircle size={16} color="#dc2626" />
+            <span>{error}</span>
+          </div>
         )}
 
-        {/* Load more */}
-        <button type="button" style={styles.loadMoreBtn}>
-          Load previous activity
-          <FiChevronDown size={16} />
-        </button>
+        {/* Empty state */}
+        {!loading && !error && totalElements === 0 && (
+          <ActivityEmptyState
+            onGoToMarketplaces={() => navigateTo('Marketplaces')}
+            onGoToStock={() => navigateTo('Stock')}
+          />
+        )}
+
+        {/* Timeline */}
+        {!loading && !error && totalElements > 0 && (
+          <>
+            {todayEvents.length > 0 && (
+              <>
+                <div style={styles.dayDivider}>
+                  <span style={styles.dayLabel}>TODAY</span>
+                  <div style={styles.dayLine} />
+                </div>
+                <div style={styles.eventList}>
+                  {todayEvents.map(renderEventCard)}
+                </div>
+              </>
+            )}
+
+            {yesterdayEvents.length > 0 && (
+              <>
+                <div style={styles.dayDivider}>
+                  <span style={styles.dayLabel}>YESTERDAY</span>
+                  <div style={styles.dayLine} />
+                </div>
+                <div style={styles.eventList}>
+                  {yesterdayEvents.map(renderEventCard)}
+                </div>
+              </>
+            )}
+
+            {olderEvents.length > 0 && (
+              <>
+                <div style={styles.dayDivider}>
+                  <span style={styles.dayLabel}>OLDER</span>
+                  <div style={styles.dayLine} />
+                </div>
+                <div style={styles.eventList}>
+                  {olderEvents.map(renderEventCard)}
+                </div>
+              </>
+            )}
+
+            {filteredEvents.length === 0 && (
+              <div style={styles.noResults}>
+                Nenhum evento encontrado para os filtros selecionados.
+              </div>
+            )}
+
+            {hasMore && (
+              <button
+                type="button"
+                style={styles.loadMoreBtn}
+                onClick={() => void handleLoadMore()}
+                disabled={loadingMore}
+              >
+                {loadingMore ? 'Carregando…' : 'Load previous activity'}
+                {!loadingMore && <FiChevronDown size={16} />}
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* Right sidebar */}
@@ -512,6 +725,9 @@ const styles = {
     justifyContent: 'center',
     cursor: 'pointer',
   },
+  spinIcon: {
+    animation: 'spin 0.8s linear infinite',
+  },
   exportBtn: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -572,6 +788,41 @@ const styles = {
     cursor: 'pointer',
   },
 
+  /* Loading */
+  loadingWrap: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '12px',
+    padding: '60px 0',
+  },
+  spinner: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    border: '3px solid #e5e7eb',
+    borderTopColor: '#4f46e5',
+    animation: 'spin 0.8s linear infinite',
+  },
+  loadingText: {
+    fontSize: '14px',
+    color: '#6b7280',
+  },
+
+  /* Error */
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '14px 18px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    borderRadius: '10px',
+    fontSize: '14px',
+    color: '#dc2626',
+    marginBottom: '16px',
+  },
+
   /* Day divider */
   dayDivider: {
     display: 'flex',
@@ -599,6 +850,14 @@ const styles = {
     flexDirection: 'column' as const,
     gap: '14px',
     marginBottom: '20px',
+  },
+
+  /* No results */
+  noResults: {
+    textAlign: 'center' as const,
+    padding: '40px 0',
+    fontSize: '14px',
+    color: '#9ca3af',
   },
 
   /* Event card */

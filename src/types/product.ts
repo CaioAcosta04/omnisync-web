@@ -12,16 +12,7 @@ export type ProductDto = {
   created_at: string
 }
 
-export type PageResponse<T> = {
-  content: T[]
-  totalElements: number
-  totalPages: number
-  number: number
-  size: number
-  first: boolean
-  last: boolean
-  numberOfElements: number
-}
+export type { PageResponse } from './page'
 
 export type MercadoLivreSyncResponse = {
   message: string
