@@ -17,6 +17,7 @@ import { AddProductModal, type NewProductData } from '../components/AddProductMo
 import { StockEmptyState } from '../components/StockEmptyState'
 import { useAuth } from '../contexts/AuthContext'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
+import { formatRelative } from '../lib/relativeTime'
 import { listProducts, syncMercadoLivreProducts } from '../services/productsApi'
 import type { ProductDto } from '../types/product'
 
@@ -48,21 +49,6 @@ const STATUS_CONFIG: Record<ProductStatus, { label: string; bg: string; color: s
 }
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
-
-function formatRelative(isoString: string): string {
-  try {
-    const diff = Date.now() - new Date(isoString).getTime()
-    const mins = Math.floor(diff / 60_000)
-    if (mins < 1) return 'agora'
-    if (mins < 60) return `${mins} min atrás`
-    const hours = Math.floor(mins / 60)
-    if (hours < 24) return `${hours}h atrás`
-    const days = Math.floor(hours / 24)
-    return `${days} dia${days > 1 ? 's' : ''} atrás`
-  } catch {
-    return isoString
-  }
-}
 
 function deriveStatus(availableQty: number): ProductStatus {
   if (availableQty === 0) return 'out_of_stock'

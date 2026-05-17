@@ -13,6 +13,10 @@ import { AppTopbar, type AppTopbarVariant } from './components/AppTopbar/AppTopb
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MercadoLivreOAuthProvider } from './contexts/MercadoLivreOAuthContext'
 import {
+  AppNavigationProvider,
+  type AppScreenLabel,
+} from './contexts/AppNavigationContext'
+import {
   UserAuthNavigationProvider,
   type UserAuthScreenLabel,
 } from './contexts/UserAuthNavigationContext'
@@ -105,18 +109,20 @@ function AppShell() {
           </main>
         </div>
       ) : (
-        <div style={styles.layout}>
-          <AppSidebar items={sidebarItems} activeLabel={activeLabel} onSelect={setActiveLabel} />
-          <div style={styles.mainColumn}>
-            <main ref={mainScrollRef} style={styles.main}>
-              {activeItem ? (
-                <div style={styles.screenTitle}>
-                  <activeItem.Screen />
-                </div>
-              ) : null}
-            </main>
+        <AppNavigationProvider onNavigate={(label: AppScreenLabel) => setActiveLabel(label)}>
+          <div style={styles.layout}>
+            <AppSidebar items={sidebarItems} activeLabel={activeLabel} onSelect={setActiveLabel} />
+            <div style={styles.mainColumn}>
+              <main ref={mainScrollRef} style={styles.main}>
+                {activeItem ? (
+                  <div style={styles.screenTitle}>
+                    <activeItem.Screen />
+                  </div>
+                ) : null}
+              </main>
+            </div>
           </div>
-        </div>
+        </AppNavigationProvider>
       )}
     </UserAuthNavigationProvider>
   )
