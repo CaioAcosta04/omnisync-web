@@ -20,7 +20,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatRelative } from '../lib/relativeTime'
 import { listProducts } from '../services/productsApi'
 import { getSaleById, listSales } from '../services/salesApi'
-import type { SaleChannel, SaleDto, SaleLogDto } from '../types/sale'
+import type { SaleChannel, SaleDto } from '../types/sale'
 
 // ─── Domain types ────────────────────────────────────────────────────────────
 
