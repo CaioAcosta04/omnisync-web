@@ -7,7 +7,6 @@ import {
   FiDownload,
   FiImage,
   FiPlus,
-  FiRefreshCw,
   FiSearch,
   FiSliders,
   FiTrendingDown,
@@ -18,8 +17,8 @@ import { StockEmptyState } from '../components/StockEmptyState'
 import { useAuth } from '../contexts/AuthContext'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
 import { formatRelative } from '../lib/relativeTime'
-import { listProducts, syncMercadoLivreProducts } from '../services/productsApi'
-import type { ProductDto } from '../types/product'
+import { createProduct, listProducts } from '../services/productsApi'
+import type { ProductCreateRequest, ProductDto } from '../types/product'
 
 type ProductStatus = 'healthy' | 'low_stock' | 'out_of_stock'
 
@@ -81,11 +80,11 @@ export function StockScreen() {
   const [totalElements, setTotalElements] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState(false)
-  const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   const mlIntegration = readMercadoLivreIntegration()
   const mlConnected =
@@ -113,29 +112,35 @@ export function StockScreen() {
     void fetchProducts()
   }, [fetchProducts])
 
-  const handleSyncML = useCallback(async () => {
-    if (systemClientId == null || syncing) return
-    setSyncing(true)
-    setSyncMessage(null)
+  const handleAddProduct = useCallback(async (data: NewProductData) => {
+    if (systemClientId == null) return
+    setCreateSubmitting(true)
+    setCreateError(null)
     try {
-      const result = await syncMercadoLivreProducts(systemClientId)
-      setSyncMessage(result.message)
+      // Only set announcement=true when mlMetadata is actually present — defensive guard
+      const hasMLMetadata = data.mlMetadata != null
+      const payload: ProductCreateRequest = {
+        system_client_id: systemClientId,
+        name: data.name,
+        sku: data.sku,
+        description: data.description,
+        stock: data.stock,
+        reserved_stock: data.reservedStock,
+        price: data.price,
+        announcement: data.announcement && hasMLMetadata,
+        resource: hasMLMetadata ? { mercado_livre: data.mlMetadata! } : {},
+      }
+      await createProduct(systemClientId, payload)
+      setShowAddModal(false)
       await fetchProducts()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao sincronizar com o Mercado Livre.')
+      setCreateError(e instanceof Error ? e.message : 'Não foi possível criar o produto.')
     } finally {
-      setSyncing(false)
+      setCreateSubmitting(false)
     }
-  }, [systemClientId, syncing, fetchProducts])
-
-  const handleAddProduct = (_data: NewProductData) => {
-    console.log('New product:', _data)
-    setShowAddModal(false)
-  }
+  }, [systemClientId, fetchProducts])
 
   const handleConnectML = () => {
-    // Navigate user to the Marketplaces screen — for now we can't programmatically switch
-    // screens without a router, so we open a hint. This will be wired when routing is added.
     window.alert('Acesse a tela "Marketplaces" para conectar sua conta do Mercado Livre.')
   }
 
@@ -161,14 +166,6 @@ export function StockScreen() {
     const totalValue = products.reduce((sum, p) => sum + p.price * p.stock, 0)
     return { totalSkus: totalElements, lowStock, outOfStock, totalValue }
   }, [rows, products, totalElements])
-
-  const activeMarketplaceCount = useMemo(() => {
-    const unique = new Set<string>()
-    for (const r of rows) {
-      for (const m of r.marketplaces) unique.add(m.letter)
-    }
-    return unique.size
-  }, [rows])
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
@@ -280,20 +277,6 @@ export function StockScreen() {
         </div>
       )}
 
-      {/* Sync message banner */}
-      {syncMessage && !error && (
-        <div style={styles.syncBanner} role="status">
-          <span>{syncMessage}</span>
-          <button
-            type="button"
-            style={styles.dismissBtn}
-            onClick={() => setSyncMessage(null)}
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
       {/* Summary cards */}
       <div style={styles.summaryRow}>
         <div style={styles.summaryCard}>
@@ -350,11 +333,7 @@ export function StockScreen() {
       <div style={styles.sectionHeader}>
         <div>
           <h2 style={styles.sectionTitle}>Inventory Overview</h2>
-          <p style={styles.sectionSubtitle}>
-            {activeMarketplaceCount > 0
-              ? `Gerenciando estoque em ${activeMarketplaceCount} marketplace${activeMarketplaceCount > 1 ? 's' : ''} ativo${activeMarketplaceCount > 1 ? 's' : ''}`
-              : 'Gerencie seu estoque sincronizado'}
-          </p>
+          <p style={styles.sectionSubtitle}>Gerencie seus produtos cadastrados</p>
         </div>
         <div style={styles.sectionActions}>
           <button type="button" style={styles.filterBtn}>
@@ -364,28 +343,6 @@ export function StockScreen() {
           <button type="button" style={styles.exportBtn}>
             <FiDownload size={16} />
             Export CSV
-          </button>
-          <button
-            type="button"
-            style={{
-              ...styles.syncBtn,
-              ...(!mlConnected || syncing ? styles.syncBtnDisabled : {}),
-            }}
-            onClick={handleSyncML}
-            disabled={!mlConnected || syncing}
-            title={
-              !mlConnected
-                ? 'Conecte o Mercado Livre para sincronizar'
-                : syncing
-                  ? 'Sincronizando…'
-                  : 'Sincronizar anúncios do Mercado Livre'
-            }
-          >
-            <FiRefreshCw
-              size={16}
-              style={syncing ? styles.spinIcon : undefined}
-            />
-            {syncing ? 'Sincronizando…' : 'Sync ML'}
           </button>
           <button type="button" style={styles.addProductBtn} onClick={() => setShowAddModal(true)}>
             <FiPlus size={18} />
@@ -406,8 +363,6 @@ export function StockScreen() {
       {!loading && !error && totalElements === 0 && (
         <StockEmptyState
           mlConnected={mlConnected}
-          syncing={syncing}
-          onSyncML={handleSyncML}
           onConnectML={handleConnectML}
           onAddManual={() => setShowAddModal(true)}
         />
@@ -510,8 +465,17 @@ export function StockScreen() {
 
       <AddProductModal
         open={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        onClose={() => {
+          if (!createSubmitting) {
+            setShowAddModal(false)
+            setCreateError(null)
+          }
+        }}
         onSubmit={handleAddProduct}
+        mlConnected={mlConnected}
+        systemClientId={systemClientId}
+        submitting={createSubmitting}
+        errorMessage={createError}
       />
     </div>
   )
@@ -629,30 +593,6 @@ const styles = {
     cursor: 'pointer',
     flexShrink: 0,
   },
-  syncBanner: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '12px',
-    padding: '12px 16px',
-    marginBottom: '20px',
-    borderRadius: '10px',
-    backgroundColor: '#f0fdf4',
-    border: '1px solid #bbf7d0',
-    color: '#166534',
-    fontSize: '14px',
-  },
-  dismissBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#166534',
-    fontSize: '14px',
-    fontWeight: 700,
-    padding: '0 4px',
-    flexShrink: 0,
-  },
-
   /* Summary cards */
   summaryRow: {
     display: 'grid',
@@ -761,24 +701,6 @@ const styles = {
     color: '#374151',
     cursor: 'pointer',
   },
-  syncBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 18px',
-    borderRadius: '10px',
-    border: 'none',
-    fontFamily: 'inherit',
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#333333',
-    backgroundColor: '#ffe600',
-    cursor: 'pointer',
-  },
-  syncBtnDisabled: {
-    opacity: 0.5,
-    cursor: 'default' as const,
-  },
   addProductBtn: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -793,10 +715,6 @@ const styles = {
     backgroundColor: '#2563eb',
     cursor: 'pointer',
   },
-  spinIcon: {
-    animation: 'spin 0.8s linear infinite',
-  },
-
   /* Loading */
   loadingWrap: {
     display: 'flex',

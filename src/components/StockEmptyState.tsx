@@ -1,17 +1,13 @@
-import { FiPackage, FiPlus, FiRefreshCw, FiShoppingCart } from 'react-icons/fi'
+import { FiPackage, FiPlus, FiShoppingCart } from 'react-icons/fi'
 
 type StockEmptyStateProps = {
   mlConnected: boolean
-  syncing: boolean
-  onSyncML: () => void
   onConnectML: () => void
   onAddManual: () => void
 }
 
 export function StockEmptyState({
   mlConnected,
-  syncing,
-  onSyncML,
   onConnectML,
   onAddManual,
 }: StockEmptyStateProps) {
@@ -25,34 +21,21 @@ export function StockEmptyState({
 
       <p style={styles.subtitle}>
         {mlConnected
-          ? 'Sincronize os seus anúncios do Mercado Livre para importar o estoque automaticamente, ou adicione um produto manualmente.'
-          : 'Conecte sua conta do Mercado Livre para importar seus anúncios e estoque automaticamente, ou adicione um produto manualmente.'}
+          ? 'Adicione um produto manualmente. Se quiser criar um anúncio no Mercado Livre ao mesmo tempo, basta marcar a opção no formulário.'
+          : 'Conecte sua conta do Mercado Livre para poder criar anúncios ao cadastrar produtos, ou adicione um produto manualmente.'}
       </p>
 
       <div style={styles.actions}>
-        {mlConnected ? (
-          <button
-            type="button"
-            style={styles.primaryBtn}
-            onClick={onSyncML}
-            disabled={syncing}
-          >
-            <FiRefreshCw
-              size={16}
-              style={syncing ? styles.spinIcon : undefined}
-            />
-            {syncing ? 'Sincronizando…' : 'Sincronizar do Mercado Livre'}
-          </button>
-        ) : (
+        {!mlConnected && (
           <button type="button" style={styles.mlBtn} onClick={onConnectML}>
             <FiShoppingCart size={16} />
             Conectar Mercado Livre
           </button>
         )}
 
-        <button type="button" style={styles.secondaryBtn} onClick={onAddManual}>
+        <button type="button" style={styles.primaryBtn} onClick={onAddManual}>
           <FiPlus size={16} />
-          Adicionar manualmente
+          Adicionar produto
         </button>
       </div>
     </div>
@@ -143,8 +126,5 @@ const styles = {
     color: '#374151',
     backgroundColor: '#ffffff',
     cursor: 'pointer',
-  },
-  spinIcon: {
-    animation: 'spin 0.8s linear infinite',
   },
 } as const

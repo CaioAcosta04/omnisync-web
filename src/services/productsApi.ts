@@ -1,5 +1,5 @@
 import { apiFetch } from '../lib/apiFetch'
-import type { MercadoLivreSyncResponse, PageResponse, ProductDto } from '../types/product'
+import type { MercadoLivreSyncResponse, PageResponse, ProductCreateRequest, ProductDto } from '../types/product'
 
 export async function listProducts(
   systemClientId: number,
@@ -28,6 +28,22 @@ export async function syncMercadoLivreProducts(
     throw new Error(text || 'Falha ao sincronizar os produtos do Mercado Livre.')
   }
   return (await res.json()) as MercadoLivreSyncResponse
+}
+
+export async function createProduct(
+  systemClientId: number,
+  data: ProductCreateRequest
+): Promise<ProductDto> {
+  const res = await apiFetch(`/api/products/${systemClientId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Não foi possível criar o produto.')
+  }
+  return (await res.json()) as ProductDto
 }
 
 export async function deleteProduct(
