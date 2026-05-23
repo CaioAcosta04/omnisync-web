@@ -1,215 +1,190 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   FiBell,
   FiCheckCircle,
   FiChevronLeft,
   FiChevronRight,
   FiClock,
+  FiExternalLink,
   FiImage,
-  FiLink,
+  FiRefreshCw,
   FiSearch,
   FiShoppingBag,
-  FiShoppingCart,
-  FiTruck,
   FiXCircle,
 } from 'react-icons/fi'
-import type { ReactNode } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
+import { formatRelative } from '../lib/relativeTime'
+import { listProducts, syncMercadoLivreProducts } from '../services/productsApi'
+import type { ProductDto } from '../types/product'
 
-type TabId = 'all' | 'linked' | 'unlinked' | 'errors'
+// ─── Types ─────────────────────────────────────────────────────────────────
 
-type ListingStatus = 'active' | 'draft' | 'paused'
-type SyncStatus = 'synced' | 'pending' | 'error'
+type TabId = 'all' | 'active' | 'paused' | 'closed'
 
-type Marketplace = {
-  name: string
-  icon: ReactNode
-  color: string
-}
+type MlListingStatus = 'active' | 'paused' | 'closed' | 'unknown'
 
-type Listing = {
-  id: string
+type MlListing = {
+  productId: number
+  itemId: string
   title: string
   sku: string
-  marketplace: Marketplace
-  linkedProduct: string | null
   available: number
-  status: ListingStatus
-  syncStatus: SyncStatus
+  price: number
+  status: MlListingStatus
+  permalink: string | null
+  lastUpdated: string | null
 }
 
-const MARKETPLACES: Record<string, Marketplace> = {
-  amazon: {
-    name: 'Amazon',
-    icon: <FiShoppingCart size={16} />,
-    color: '#f59e0b',
-  },
-  mercadolivre: {
-    name: 'Mercado Livre',
-    icon: <FiShoppingBag size={16} />,
-    color: '#ffe600',
-  },
-  shopify: {
-    name: 'Shopify',
-    icon: <FiTruck size={16} />,
-    color: '#22c55e',
-  },
-  ebay: {
-    name: 'eBay',
-    icon: <FiShoppingBag size={16} />,
-    color: '#ef4444',
-  },
-}
+// ─── Constants ─────────────────────────────────────────────────────────────
 
-const MOCK_LISTINGS: Listing[] = [
-  {
-    id: '1',
-    title: 'Sony WH-1000XM5 Wireless Headphones',
-    sku: 'SNY-HEAD-BLK-01',
-    marketplace: MARKETPLACES.amazon,
-    linkedProduct: 'Sony XM5 Premium Audio',
-    available: 42,
-    status: 'active',
-    syncStatus: 'synced',
-  },
-  {
-    id: '2',
-    title: 'Mechanical Keyboard RGB - Cherry Blue',
-    sku: 'KBD-MCH-RGB-L2',
-    marketplace: MARKETPLACES.ebay,
-    linkedProduct: null,
-    available: 0,
-    status: 'draft',
-    syncStatus: 'pending',
-  },
-  {
-    id: '3',
-    title: 'Vlog Pro 4K Camera Bundle',
-    sku: 'CAM-VLG-BNDL',
-    marketplace: MARKETPLACES.shopify,
-    linkedProduct: 'Vlog Master Kit',
-    available: 12,
-    status: 'active',
-    syncStatus: 'error',
-  },
-  {
-    id: '4',
-    title: 'L-Shape Gaming Desk Carbon Fiber',
-    sku: 'FUR-DSK-GAM-04',
-    marketplace: MARKETPLACES.amazon,
-    linkedProduct: 'Elite Series Gaming Desk',
-    available: 155,
-    status: 'active',
-    syncStatus: 'synced',
-  },
-  {
-    id: '5',
-    title: 'Fone Bluetooth TWS Pro Max',
-    sku: 'FON-BT-PROMAX',
-    marketplace: MARKETPLACES.mercadolivre,
-    linkedProduct: 'TWS Pro Max Earbuds',
-    available: 78,
-    status: 'active',
-    syncStatus: 'synced',
-  },
-  {
-    id: '6',
-    title: 'Mouse Gamer Sem Fio 16000 DPI',
-    sku: 'MOU-GAM-16K',
-    marketplace: MARKETPLACES.mercadolivre,
-    linkedProduct: null,
-    available: 0,
-    status: 'draft',
-    syncStatus: 'pending',
-  },
-  {
-    id: '7',
-    title: 'Ultra-Wide Monitor 34" Curved',
-    sku: 'MON-UW-34-CRV',
-    marketplace: MARKETPLACES.amazon,
-    linkedProduct: 'UltraWide Pro Monitor',
-    available: 23,
-    status: 'active',
-    syncStatus: 'synced',
-  },
-  {
-    id: '8',
-    title: 'Webcam Full HD Autofocus',
-    sku: 'WBC-FHD-AF-01',
-    marketplace: MARKETPLACES.shopify,
-    linkedProduct: 'HD Webcam Pro',
-    available: 9,
-    status: 'paused',
-    syncStatus: 'error',
-  },
-]
-
-const ITEMS_PER_PAGE = 4
+const ITEMS_PER_PAGE = 8
 
 const TAB_ITEMS: { id: TabId; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'linked', label: 'Linked' },
-  { id: 'unlinked', label: 'Unlinked' },
-  { id: 'errors', label: 'Errors' },
+  { id: 'all', label: 'Todos' },
+  { id: 'active', label: 'Ativos' },
+  { id: 'paused', label: 'Pausados' },
+  { id: 'closed', label: 'Fechados' },
 ]
 
-const STATUS_CONFIG: Record<ListingStatus, { label: string; bg: string; color: string }> = {
-  active: { label: 'ACTIVE', bg: '#dcfce7', color: '#166534' },
-  draft: { label: 'DRAFT', bg: '#f3f4f6', color: '#374151' },
-  paused: { label: 'PAUSED', bg: '#fef3c7', color: '#92400e' },
+const STATUS_CONFIG: Record<MlListingStatus, { label: string; bg: string; color: string }> = {
+  active: { label: 'ATIVO', bg: '#dcfce7', color: '#166534' },
+  paused: { label: 'PAUSADO', bg: '#fef3c7', color: '#92400e' },
+  closed: { label: 'FECHADO', bg: '#fee2e2', color: '#991b1b' },
+  unknown: { label: 'OUTRO', bg: '#f3f4f6', color: '#374151' },
 }
 
-const SYNC_CONFIG: Record<SyncStatus, { label: string; color: string; icon: ReactNode }> = {
-  synced: {
-    label: 'Synced',
-    color: '#4f46e5',
-    icon: <FiCheckCircle size={12} />,
-  },
-  pending: {
-    label: 'Pending Link',
-    color: '#6b7280',
-    icon: <FiClock size={12} />,
-  },
-  error: {
-    label: 'Sync Error',
-    color: '#dc2626',
-    icon: <FiXCircle size={12} />,
-  },
+const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+function normalizeStatus(raw: unknown): MlListingStatus {
+  const s = String(raw ?? '').toLowerCase()
+  if (s === 'active') return 'active'
+  if (s === 'paused') return 'paused'
+  if (s === 'closed' || s === 'deleted') return 'closed'
+  return 'unknown'
 }
+
+function toMlListing(p: ProductDto): MlListing | null {
+  const ml = p.resource?.mercado_livre as Record<string, unknown> | undefined
+  if (!ml?.item_id) return null
+  return {
+    productId: p.id,
+    itemId: String(ml.item_id),
+    title: p.name,
+    sku: p.sku,
+    available: Math.max(0, p.stock - p.reserved_stock),
+    price: p.price,
+    status: normalizeStatus(ml.status),
+    permalink: ml.permalink ? String(ml.permalink) : null,
+    lastUpdated: ml.last_updated ? String(ml.last_updated) : p.created_at ?? null,
+  }
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────
 
 export function ListingsScreen() {
+  const { user } = useAuth()
+  const systemClientId = user?.systemClientId ?? null
+
+  const mlIntegration = readMercadoLivreIntegration()
+  const mlConnected =
+    mlIntegration != null &&
+    systemClientId != null &&
+    Number(mlIntegration.systemClientId) === Number(systemClientId) &&
+    mlIntegration.active === true
+
+  const [products, setProducts] = useState<ProductDto[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [currentPage, setCurrentPage] = useState(1)
 
-  const filteredListings = useMemo(() => {
-    let listings = MOCK_LISTINGS
-
-    if (activeTab === 'linked') {
-      listings = listings.filter((l) => l.linkedProduct !== null)
-    } else if (activeTab === 'unlinked') {
-      listings = listings.filter((l) => l.linkedProduct === null)
-    } else if (activeTab === 'errors') {
-      listings = listings.filter((l) => l.syncStatus === 'error')
+  const fetchListings = useCallback(async () => {
+    if (systemClientId == null) return
+    setLoading(true)
+    setError(null)
+    try {
+      const page = await listProducts(systemClientId, 0, 200)
+      setProducts(page.content)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar anúncios.')
+    } finally {
+      setLoading(false)
     }
+  }, [systemClientId])
+
+  useEffect(() => {
+    void fetchListings()
+  }, [fetchListings])
+
+  const handleSync = useCallback(async () => {
+    if (systemClientId == null || syncing) return
+    setSyncing(true)
+    setSyncMessage(null)
+    setError(null)
+    try {
+      const result = await syncMercadoLivreProducts(systemClientId)
+      setSyncMessage(result.message)
+      await fetchListings()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao sincronizar anúncios do Mercado Livre.')
+    } finally {
+      setSyncing(false)
+    }
+  }, [systemClientId, syncing, fetchListings])
+
+  // Derive ML listings from all products
+  const allListings = useMemo<MlListing[]>(() => {
+    const result: MlListing[] = []
+    for (const p of products) {
+      const l = toMlListing(p)
+      if (l) result.push(l)
+    }
+    return result
+  }, [products])
+
+  const filteredListings = useMemo(() => {
+    let list = allListings
+
+    if (activeTab === 'active') list = list.filter((l) => l.status === 'active')
+    else if (activeTab === 'paused') list = list.filter((l) => l.status === 'paused')
+    else if (activeTab === 'closed') list = list.filter((l) => l.status === 'closed' || l.status === 'unknown')
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      listings = listings.filter(
+      list = list.filter(
         (l) =>
           l.title.toLowerCase().includes(q) ||
           l.sku.toLowerCase().includes(q) ||
-          l.marketplace.name.toLowerCase().includes(q)
+          l.itemId.toLowerCase().includes(q)
       )
     }
 
-    return listings
-  }, [searchQuery, activeTab])
+    return list
+  }, [allListings, activeTab, searchQuery])
 
-  const totalPages = Math.ceil(filteredListings.length / ITEMS_PER_PAGE)
+  const totalPages = Math.max(1, Math.ceil(filteredListings.length / ITEMS_PER_PAGE))
+
   const paginatedListings = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE
     return filteredListings.slice(start, start + ITEMS_PER_PAGE)
   }, [filteredListings, currentPage])
+
+  const stats = useMemo(() => {
+    const active = allListings.filter((l) => l.status === 'active').length
+    const inactive = allListings.filter((l) => l.status !== 'active').length
+    const lastUpdated = allListings
+      .map((l) => l.lastUpdated)
+      .filter((d): d is string => d != null)
+      .sort()
+      .at(-1)
+    return { total: allListings.length, active, inactive, lastUpdated }
+  }, [allListings])
 
   const handleTabChange = (tab: TabId) => {
     setActiveTab(tab)
@@ -221,12 +196,6 @@ export function ListingsScreen() {
     setCurrentPage(1)
   }
 
-  const stats = useMemo(() => {
-    const errors = MOCK_LISTINGS.filter((l) => l.syncStatus === 'error').length
-    const unlinked = MOCK_LISTINGS.filter((l) => l.linkedProduct === null).length
-    return { errors, unlinked }
-  }, [])
-
   const renderPagination = () => {
     const buttons: React.ReactNode[] = []
 
@@ -237,33 +206,47 @@ export function ListingsScreen() {
         style={{ ...styles.pageBtn, ...(currentPage === 1 ? styles.pageBtnDisabled : {}) }}
         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
         disabled={currentPage === 1}
-        aria-label="Previous page"
+        aria-label="Página anterior"
       >
         <FiChevronLeft size={16} />
       </button>
     )
 
-    for (let i = 1; i <= totalPages; i++) {
-      buttons.push(
-        <button
-          key={i}
-          type="button"
-          style={{ ...styles.pageBtn, ...(i === currentPage ? styles.pageBtnActive : {}) }}
-          onClick={() => setCurrentPage(i)}
-        >
-          {i}
-        </button>
-      )
+    const maxVisible = 3
+    const pages: (number | 'ellipsis')[] = []
+    for (let i = 1; i <= Math.min(maxVisible, totalPages); i++) pages.push(i)
+    if (totalPages > maxVisible + 1) pages.push('ellipsis')
+    if (totalPages > maxVisible) pages.push(totalPages)
+
+    for (const page of pages) {
+      if (page === 'ellipsis') {
+        buttons.push(<span key="ellipsis" style={styles.ellipsis}>...</span>)
+      } else {
+        const isActive = page === currentPage
+        buttons.push(
+          <button
+            key={page}
+            type="button"
+            style={{ ...styles.pageBtn, ...(isActive ? styles.pageBtnActive : {}) }}
+            onClick={() => setCurrentPage(page)}
+          >
+            {page}
+          </button>
+        )
+      }
     }
 
     buttons.push(
       <button
         key="next"
         type="button"
-        style={{ ...styles.pageBtn, ...(currentPage === totalPages ? styles.pageBtnDisabled : {}) }}
+        style={{
+          ...styles.pageBtn,
+          ...(currentPage >= totalPages || filteredListings.length === 0 ? styles.pageBtnDisabled : {}),
+        }}
         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-        disabled={currentPage === totalPages}
-        aria-label="Next page"
+        disabled={currentPage >= totalPages || filteredListings.length === 0}
+        aria-label="Próxima página"
       >
         <FiChevronRight size={16} />
       </button>
@@ -280,176 +263,313 @@ export function ListingsScreen() {
           <FiSearch size={18} color="#9ca3af" style={{ flexShrink: 0 }} />
           <input
             type="text"
-            placeholder="Search listings, SKUs, or marketplaces..."
+            placeholder="Buscar por título, SKU ou item ID..."
             value={searchQuery}
             onChange={handleSearch}
             style={styles.searchInput}
           />
         </div>
         <div style={styles.topBarRight}>
-          <button type="button" style={styles.bellBtn} aria-label="Notifications">
+          <button type="button" style={styles.bellBtn} aria-label="Notificações">
             <FiBell size={20} color="#6b7280" />
           </button>
-          <button type="button" style={styles.linkListingBtn}>
-            <FiLink size={16} />
-            Link Listing
+          <button
+            type="button"
+            style={{
+              ...styles.syncBtn,
+              ...(!mlConnected || syncing ? styles.syncBtnDisabled : {}),
+            }}
+            onClick={handleSync}
+            disabled={!mlConnected || syncing}
+            title={
+              !mlConnected
+                ? 'Conecte o Mercado Livre para sincronizar'
+                : syncing
+                  ? 'Sincronizando…'
+                  : 'Sincronizar anúncios do Mercado Livre'
+            }
+          >
+            <FiRefreshCw size={16} style={syncing ? styles.spinIcon : undefined} />
+            {syncing ? 'Sincronizando…' : 'Sincronizar ML'}
           </button>
         </div>
       </div>
 
       {/* Header */}
       <div style={styles.header}>
-        <h1 style={styles.title}>Marketplace Listings</h1>
-        <p style={styles.subtitle}>
-          Manage synchronization between marketplace advertisements and your central inventory.
-        </p>
+        <div style={styles.headerLeft}>
+          <div style={styles.mlLogoWrap}>
+            <img
+              src="https://http2.mlstatic.com/frontend-assets/ml-web-navigation/ui-navigation/5.21.22/mercadolibre/logo__large_plus@2x.png"
+              alt="Mercado Livre"
+              style={styles.mlLogo}
+            />
+          </div>
+          <div>
+            <h1 style={styles.title}>Anúncios do Mercado Livre</h1>
+            <p style={styles.subtitle}>
+              Gerencie e acompanhe seus anúncios publicados no Mercado Livre.
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div style={styles.tabs}>
-        {TAB_ITEMS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            style={{
-              ...styles.tabBtn,
-              ...(activeTab === tab.id ? styles.tabBtnActive : {}),
-            }}
-            onClick={() => handleTabChange(tab.id)}
-          >
-            {tab.label}
+      {/* Error banner */}
+      {error && (
+        <div style={styles.errorBanner} role="alert">
+          <span>{error}</span>
+          <button type="button" style={styles.retryBtn} onClick={() => void fetchListings()}>
+            Tentar novamente
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
-      {/* Table */}
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={{ ...styles.th, ...styles.thFirst }}>LISTING TITLE</th>
-              <th style={styles.th}>MARKETPLACE</th>
-              <th style={styles.th}>LINKED PRODUCT</th>
-              <th style={styles.th}>AVAILABLE</th>
-              <th style={styles.th}>STATUS</th>
-              <th style={{ ...styles.th, ...styles.thLast }}>SYNC STATUS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedListings.map((listing) => {
-              const statusCfg = STATUS_CONFIG[listing.status]
-              const syncCfg = SYNC_CONFIG[listing.syncStatus]
+      {/* Sync message banner */}
+      {syncMessage && !error && (
+        <div style={styles.syncBanner} role="status">
+          <span>{syncMessage}</span>
+          <button
+            type="button"
+            style={styles.dismissBtn}
+            onClick={() => setSyncMessage(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Not connected state */}
+      {!loading && !mlConnected && (
+        <div style={styles.emptyWrap}>
+          <div style={styles.emptyIconCircle}>
+            <FiShoppingBag size={34} color="#9ca3af" />
+          </div>
+          <h3 style={styles.emptyTitle}>Mercado Livre não conectado</h3>
+          <p style={styles.emptySubtitle}>
+            Conecte sua conta do Mercado Livre na tela de Marketplaces para visualizar e sincronizar seus anúncios.
+          </p>
+        </div>
+      )}
+
+      {/* Main content */}
+      {mlConnected && (
+        <>
+          {/* Tabs */}
+          <div style={styles.tabs}>
+            {TAB_ITEMS.map((tab) => {
+              const count =
+                tab.id === 'all'
+                  ? allListings.length
+                  : tab.id === 'active'
+                    ? stats.active
+                    : tab.id === 'paused'
+                      ? allListings.filter((l) => l.status === 'paused').length
+                      : allListings.filter((l) => l.status === 'closed' || l.status === 'unknown').length
 
               return (
-                <tr key={listing.id} style={styles.tr}>
-                  <td style={{ ...styles.td, ...styles.tdFirst }}>
-                    <div style={styles.titleCell}>
-                      <div style={styles.listingIcon}>
-                        <FiImage size={18} color="#9ca3af" />
-                      </div>
-                      <div>
-                        <span style={styles.listingTitle}>{listing.title}</span>
-                        <span style={styles.listingSku}>SKU: {listing.sku}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={styles.marketplaceCell}>
-                      <span
-                        style={{
-                          ...styles.mpIcon,
-                          backgroundColor: `${listing.marketplace.color}20`,
-                          color: listing.marketplace.color,
-                        }}
-                      >
-                        {listing.marketplace.icon}
-                      </span>
-                      <span style={styles.mpName}>{listing.marketplace.name}</span>
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    {listing.linkedProduct ? (
-                      <span style={styles.linkedText}>{listing.linkedProduct}</span>
-                    ) : (
-                      <span style={styles.notLinked}>Not linked</span>
-                    )}
-                  </td>
-                  <td style={styles.td}>
+                <button
+                  key={tab.id}
+                  type="button"
+                  style={{
+                    ...styles.tabBtn,
+                    ...(activeTab === tab.id ? styles.tabBtnActive : {}),
+                  }}
+                  onClick={() => handleTabChange(tab.id)}
+                >
+                  {tab.label}
+                  {!loading && (
                     <span
                       style={{
-                        ...styles.availableText,
-                        color: listing.available === 0 ? '#dc2626' : '#111827',
+                        ...styles.tabCount,
+                        ...(activeTab === tab.id ? styles.tabCountActive : {}),
                       }}
                     >
-                      {listing.available} units
+                      {count}
                     </span>
-                  </td>
-                  <td style={styles.td}>
-                    <span
-                      style={{
-                        ...styles.statusBadge,
-                        backgroundColor: statusCfg.bg,
-                        color: statusCfg.color,
-                      }}
-                    >
-                      {statusCfg.label}
-                    </span>
-                  </td>
-                  <td style={{ ...styles.td, ...styles.tdLast }}>
-                    <div style={{ ...styles.syncCell, color: syncCfg.color }}>
-                      {syncCfg.icon}
-                      <span style={styles.syncLabel}>{syncCfg.label}</span>
-                    </div>
-                  </td>
-                </tr>
+                  )}
+                </button>
               )
             })}
-          </tbody>
-        </table>
-      </div>
+          </div>
 
-      {/* Pagination */}
-      <div style={styles.pagination}>
-        <span style={styles.paginationInfo}>
-          Showing <strong>{(currentPage - 1) * ITEMS_PER_PAGE + 1}</strong> to{' '}
-          <strong>{Math.min(currentPage * ITEMS_PER_PAGE, filteredListings.length)}</strong> of{' '}
-          <strong>{filteredListings.length}</strong> listings
-        </span>
-        <div style={styles.paginationBtns}>{renderPagination()}</div>
-      </div>
+          {/* Loading */}
+          {loading && (
+            <div style={styles.loadingWrap}>
+              <div style={styles.spinner} />
+              <span style={styles.loadingText}>Carregando anúncios…</span>
+            </div>
+          )}
 
-      {/* Footer stats */}
-      <div style={styles.footerRow}>
-        <div style={styles.footerCard}>
-          <div style={{ ...styles.footerIcon, backgroundColor: '#ede9fe', color: '#7c3aed' }}>
-            <FiClock size={20} />
-          </div>
-          <div>
-            <span style={styles.footerLabel}>Last Sync</span>
-            <span style={styles.footerValue}>2 minutes ago</span>
-          </div>
-        </div>
-        <div style={styles.footerCard}>
-          <div style={{ ...styles.footerIcon, backgroundColor: '#dcfce7', color: '#16a34a' }}>
-            <FiCheckCircle size={20} />
-          </div>
-          <div>
-            <span style={styles.footerLabel}>Health Status</span>
-            <span style={styles.footerValue}>
-              {stats.errors === 0 ? 'Excellent' : `${stats.errors} error(s)`}
-            </span>
-          </div>
-        </div>
-        <div style={styles.footerCard}>
-          <div style={{ ...styles.footerIcon, backgroundColor: '#fef3c7', color: '#d97706' }}>
-            <FiLink size={20} />
-          </div>
-          <div>
-            <span style={styles.footerLabel}>Unlinked Found</span>
-            <span style={styles.footerValue}>{stats.unlinked} Listings</span>
-          </div>
-        </div>
-      </div>
+          {/* Empty — no ML listings */}
+          {!loading && allListings.length === 0 && (
+            <div style={styles.emptyWrap}>
+              <div style={styles.emptyIconCircle}>
+                <FiShoppingBag size={34} color="#9ca3af" />
+              </div>
+              <h3 style={styles.emptyTitle}>Nenhum anúncio encontrado</h3>
+              <p style={styles.emptySubtitle}>
+                Clique em "Sincronizar ML" para importar seus anúncios do Mercado Livre.
+              </p>
+              <button
+                type="button"
+                style={styles.syncCtaBtn}
+                onClick={handleSync}
+                disabled={syncing}
+              >
+                <FiRefreshCw size={15} style={syncing ? styles.spinIcon : undefined} />
+                {syncing ? 'Sincronizando…' : 'Sincronizar agora'}
+              </button>
+            </div>
+          )}
+
+          {/* Empty — tab filter yields nothing */}
+          {!loading && allListings.length > 0 && filteredListings.length === 0 && (
+            <div style={styles.emptyWrap}>
+              <h3 style={styles.emptyTitle}>Sem resultados</h3>
+              <p style={styles.emptySubtitle}>Tente ajustar os filtros ou a busca.</p>
+            </div>
+          )}
+
+          {/* Table */}
+          {!loading && filteredListings.length > 0 && (
+            <>
+              <div style={styles.tableWrap}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...styles.th, ...styles.thFirst }}>TÍTULO DO ANÚNCIO</th>
+                      <th style={styles.th}>ITEM ID</th>
+                      <th style={styles.th}>DISPONÍVEL</th>
+                      <th style={styles.th}>PREÇO</th>
+                      <th style={styles.th}>ÚLTIMA ATUALIZAÇÃO</th>
+                      <th style={{ ...styles.th, ...styles.thLast }}>STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedListings.map((listing) => {
+                      const statusCfg = STATUS_CONFIG[listing.status]
+                      return (
+                        <tr key={listing.productId} style={styles.tr}>
+                          <td style={{ ...styles.td, ...styles.tdFirst }}>
+                            <div style={styles.titleCell}>
+                              <div style={styles.listingIcon}>
+                                <FiImage size={18} color="#9ca3af" />
+                              </div>
+                              <div>
+                                <span style={styles.listingTitle}>{listing.title}</span>
+                                <span style={styles.listingSku}>SKU: {listing.sku}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={styles.td}>
+                            {listing.permalink ? (
+                              <a
+                                href={listing.permalink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={styles.itemIdLink}
+                              >
+                                {listing.itemId}
+                                <FiExternalLink size={12} />
+                              </a>
+                            ) : (
+                              <span style={styles.itemIdText}>{listing.itemId}</span>
+                            )}
+                          </td>
+                          <td style={styles.td}>
+                            <span
+                              style={{
+                                ...styles.availableText,
+                                color:
+                                  listing.available === 0
+                                    ? '#dc2626'
+                                    : listing.available < 10
+                                      ? '#d97706'
+                                      : '#111827',
+                              }}
+                            >
+                              {listing.available} un.
+                            </span>
+                          </td>
+                          <td style={styles.td}>
+                            <span style={styles.priceText}>{BRL.format(listing.price)}</span>
+                          </td>
+                          <td style={styles.td}>
+                            <span style={styles.dateText}>
+                              {listing.lastUpdated
+                                ? formatRelative(listing.lastUpdated)
+                                : '—'}
+                            </span>
+                          </td>
+                          <td style={{ ...styles.td, ...styles.tdLast }}>
+                            <span
+                              style={{
+                                ...styles.statusBadge,
+                                backgroundColor: statusCfg.bg,
+                                color: statusCfg.color,
+                              }}
+                            >
+                              {statusCfg.label}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              <div style={styles.pagination}>
+                <span style={styles.paginationInfo}>
+                  Mostrando{' '}
+                  <strong>{(currentPage - 1) * ITEMS_PER_PAGE + 1}</strong> a{' '}
+                  <strong>
+                    {Math.min(currentPage * ITEMS_PER_PAGE, filteredListings.length)}
+                  </strong>{' '}
+                  de <strong>{filteredListings.length}</strong> anúncios
+                </span>
+                <div style={styles.paginationBtns}>{renderPagination()}</div>
+              </div>
+            </>
+          )}
+
+          {/* Footer stats */}
+          {!loading && (
+            <div style={styles.footerRow}>
+              <div style={styles.footerCard}>
+                <div style={{ ...styles.footerIcon, backgroundColor: '#ede9fe', color: '#7c3aed' }}>
+                  <FiClock size={20} />
+                </div>
+                <div>
+                  <span style={styles.footerLabel}>Última Sincronização</span>
+                  <span style={styles.footerValue}>
+                    {stats.lastUpdated ? formatRelative(stats.lastUpdated) : '—'}
+                  </span>
+                </div>
+              </div>
+              <div style={styles.footerCard}>
+                <div style={{ ...styles.footerIcon, backgroundColor: '#dcfce7', color: '#16a34a' }}>
+                  <FiCheckCircle size={20} />
+                </div>
+                <div>
+                  <span style={styles.footerLabel}>Anúncios Ativos</span>
+                  <span style={styles.footerValue}>{stats.active}</span>
+                </div>
+              </div>
+              <div style={styles.footerCard}>
+                <div style={{ ...styles.footerIcon, backgroundColor: '#fee2e2', color: '#dc2626' }}>
+                  <FiXCircle size={20} />
+                </div>
+                <div>
+                  <span style={styles.footerLabel}>Inativos / Fechados</span>
+                  <span style={styles.footerValue}>{stats.inactive}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -472,7 +592,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '16px',
-    marginBottom: '32px',
+    marginBottom: '28px',
     flexWrap: 'wrap' as const,
   },
   searchWrap: {
@@ -511,7 +631,7 @@ const styles = {
     justifyContent: 'center',
     cursor: 'pointer',
   },
-  linkListingBtn: {
+  syncBtn: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
@@ -521,20 +641,45 @@ const styles = {
     fontFamily: 'inherit',
     fontSize: '14px',
     fontWeight: 600,
-    color: '#ffffff',
-    backgroundColor: '#4f46e5',
+    color: '#333333',
+    backgroundColor: '#ffe600',
     cursor: 'pointer',
+  },
+  syncBtnDisabled: {
+    opacity: 0.5,
+    cursor: 'default' as const,
+  },
+  spinIcon: {
+    animation: 'spin 0.8s linear infinite',
   },
 
   /* Header */
   header: {
-    marginBottom: '24px',
+    marginBottom: '28px',
+  },
+  headerLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+  },
+  mlLogoWrap: {
+    padding: '8px 12px',
+    backgroundColor: '#fffde7',
+    borderRadius: '10px',
+    border: '1px solid #fde68a',
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  mlLogo: {
+    height: '22px',
+    objectFit: 'contain' as const,
   },
   title: {
-    fontSize: '28px',
+    fontSize: '26px',
     fontWeight: 700,
     color: '#111827',
-    marginBottom: '6px',
+    marginBottom: '4px',
     lineHeight: 1.2,
   },
   subtitle: {
@@ -543,31 +688,175 @@ const styles = {
     color: '#6b7280',
   },
 
+  /* Banners */
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    borderRadius: '10px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#991b1b',
+    fontSize: '14px',
+  },
+  retryBtn: {
+    padding: '6px 14px',
+    borderRadius: '8px',
+    border: '1px solid #fca5a5',
+    backgroundColor: '#ffffff',
+    color: '#991b1b',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  syncBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    borderRadius: '10px',
+    backgroundColor: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    color: '#166534',
+    fontSize: '14px',
+  },
+  dismissBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#166534',
+    fontSize: '14px',
+    fontWeight: 700,
+    padding: '0 4px',
+    flexShrink: 0,
+  },
+
+  /* Empty states */
+  emptyWrap: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '64px 24px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #e5e7eb',
+    borderRadius: '14px',
+    textAlign: 'center' as const,
+    gap: '12px',
+    marginBottom: '24px',
+  },
+  emptyIconCircle: {
+    width: '76px',
+    height: '76px',
+    borderRadius: '50%',
+    backgroundColor: '#f3f4f6',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '4px',
+  },
+  emptyTitle: {
+    margin: 0,
+    fontSize: '20px',
+    fontWeight: 700,
+    color: '#111827',
+  },
+  emptySubtitle: {
+    margin: 0,
+    fontSize: '14px',
+    color: '#6b7280',
+    lineHeight: 1.6,
+    maxWidth: '400px',
+  },
+  syncCtaBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginTop: '4px',
+    padding: '10px 22px',
+    borderRadius: '10px',
+    border: 'none',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#333333',
+    backgroundColor: '#ffe600',
+    cursor: 'pointer',
+  },
+
   /* Tabs */
   tabs: {
     display: 'flex',
     gap: '4px',
-    marginBottom: '24px',
+    marginBottom: '20px',
     borderRadius: '10px',
     border: '1px solid #e5e7eb',
     overflow: 'hidden',
     width: 'fit-content',
   },
   tabBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
     padding: '9px 20px',
     border: 'none',
+    borderRight: '1px solid #e5e7eb',
     backgroundColor: '#ffffff',
     fontFamily: 'inherit',
     fontSize: '13px',
     fontWeight: 500,
     color: '#6b7280',
     cursor: 'pointer',
-    borderRight: '1px solid #e5e7eb',
   },
   tabBtnActive: {
     backgroundColor: '#f3f4f6',
     color: '#111827',
     fontWeight: 600,
+  },
+  tabCount: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '20px',
+    height: '20px',
+    padding: '0 6px',
+    borderRadius: '999px',
+    backgroundColor: '#f3f4f6',
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#6b7280',
+  },
+  tabCountActive: {
+    backgroundColor: '#e5e7eb',
+    color: '#111827',
+  },
+
+  /* Loading */
+  loadingWrap: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    padding: '64px 0',
+    gap: '16px',
+  },
+  spinner: {
+    width: '40px',
+    height: '40px',
+    border: '4px solid #e5e7eb',
+    borderTopColor: '#ffe600',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+  },
+  loadingText: {
+    fontSize: '14px',
+    color: '#6b7280',
   },
 
   /* Table */
@@ -581,6 +870,7 @@ const styles = {
   table: {
     width: '100%',
     borderCollapse: 'collapse' as const,
+    tableLayout: 'auto' as const,
   },
   th: {
     padding: '14px 16px',
@@ -595,9 +885,7 @@ const styles = {
   },
   thFirst: { paddingLeft: '24px' },
   thLast: { paddingRight: '24px' },
-  tr: {
-    borderBottom: '1px solid #f3f4f6',
-  },
+  tr: { borderBottom: '1px solid #f3f4f6' },
   td: {
     padding: '16px',
     fontSize: '14px',
@@ -636,44 +924,41 @@ const styles = {
     marginTop: '2px',
   },
 
-  /* Marketplace cell */
-  marketplaceCell: {
-    display: 'flex',
+  /* Item ID */
+  itemIdLink: {
+    display: 'inline-flex',
     alignItems: 'center',
-    gap: '8px',
-  },
-  mpIcon: {
-    width: '30px',
-    height: '30px',
-    borderRadius: '8px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mpName: {
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#111827',
-  },
-
-  /* Linked product */
-  linkedText: {
+    gap: '5px',
     fontSize: '13px',
     fontWeight: 500,
-    color: '#374151',
-    lineHeight: 1.4,
+    color: '#4f46e5',
+    textDecoration: 'none',
+    fontFamily: 'monospace',
   },
-  notLinked: {
+  itemIdText: {
     fontSize: '13px',
     fontWeight: 500,
-    color: '#d1d5db',
-    fontStyle: 'italic' as const,
+    color: '#6b7280',
+    fontFamily: 'monospace',
   },
 
   /* Available */
   availableText: {
     fontSize: '14px',
     fontWeight: 600,
+  },
+
+  /* Price */
+  priceText: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#111827',
+  },
+
+  /* Date */
+  dateText: {
+    fontSize: '13px',
+    color: '#6b7280',
   },
 
   /* Status badge */
@@ -684,19 +969,7 @@ const styles = {
     fontSize: '11px',
     fontWeight: 700,
     letterSpacing: '0.03em',
-  },
-
-  /* Sync status */
-  syncCell: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    fontSize: '13px',
-    fontWeight: 600,
     whiteSpace: 'nowrap' as const,
-  },
-  syncLabel: {
-    fontSize: '13px',
   },
 
   /* Pagination */
@@ -741,6 +1014,11 @@ const styles = {
   pageBtnDisabled: {
     opacity: 0.4,
     cursor: 'default' as const,
+  },
+  ellipsis: {
+    fontSize: '14px',
+    color: '#9ca3af',
+    padding: '0 4px',
   },
 
   /* Footer stats */
