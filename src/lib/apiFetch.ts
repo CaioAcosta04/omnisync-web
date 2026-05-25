@@ -59,6 +59,12 @@ export function tryRefreshAccessToken(): Promise<boolean> {
 }
 
 function rawFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? 'GET').toUpperCase()
+  let payload: unknown
+  if (init.body != null) {
+    try { payload = JSON.parse(init.body as string) } catch { payload = init.body }
+  }
+  console.log(`[apiFetch] ${method} ${url}`, payload !== undefined ? payload : '(no body)')
   return fetch(url, {
     ...init,
     credentials: init.credentials ?? 'include',

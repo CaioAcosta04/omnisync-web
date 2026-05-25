@@ -3,6 +3,7 @@ import {
   FiBell,
   FiEye,
   FiEyeOff,
+  FiFileText,
   FiLock,
   FiMonitor,
   FiMoon,
@@ -416,6 +417,18 @@ export function SettingsScreen() {
               {tab.label}
             </button>
           ))}
+
+          <div style={s.sidebarDivider} />
+
+          <a
+            href="https://drive.google.com/uc?export=download&id=1A4ZR9at7hDXYKwW1wDP-Q1ikGATQ0ZpV"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={s.presentationLink}
+          >
+            <FiFileText size={15} />
+            <span>Apresentação do Projeto</span>
+          </a>
         </nav>
 
         <div style={s.panel}>
@@ -495,6 +508,22 @@ const s = {
     backgroundColor: '#ede9fe',
     color: '#6d28d9',
     fontWeight: 600,
+  },
+  sidebarDivider: {
+    height: '1px',
+    backgroundColor: '#f3f4f6',
+    margin: '4px 0',
+  },
+  presentationLink: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '9px',
+    padding: '9px 14px',
+    borderRadius: '10px',
+    textDecoration: 'none',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#6b7280',
   },
   panel: {
     flex: 1,
