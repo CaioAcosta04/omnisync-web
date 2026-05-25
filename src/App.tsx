@@ -165,7 +165,7 @@ const styles = {
     flex: 1,
     minHeight: 0,
     display: 'flex',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
     padding: '24px 16px',
     overflowY: 'auto',
