@@ -18,6 +18,8 @@ type ManageUserModalProps = {
   user: ManagedUser | null
   onClose: () => void
   onSave: (user: ManagedUser) => void
+  submitting?: boolean
+  error?: string | null
 }
 
 const ROLES: { id: UserRole; label: string; description: string }[] = [
@@ -55,19 +57,38 @@ const AVATAR_COLORS: Record<string, string> = {
   RO: '#dc2626',
 }
 
-export function ManageUserModal({ user, onClose, onSave }: ManageUserModalProps) {
+export function ManageUserModal({
+  user,
+  onClose,
+  onSave,
+  submitting = false,
+  error = null,
+}: ManageUserModalProps) {
   if (!user) return null
-  return <ManageUserModalForm key={user.id} user={user} onClose={onClose} onSave={onSave} />
+  return (
+    <ManageUserModalForm
+      key={user.id}
+      user={user}
+      onClose={onClose}
+      onSave={onSave}
+      submitting={submitting}
+      error={error}
+    />
+  )
 }
 
 function ManageUserModalForm({
   user,
   onClose,
   onSave,
+  submitting,
+  error,
 }: {
   user: ManagedUser
   onClose: () => void
   onSave: (user: ManagedUser) => void
+  submitting: boolean
+  error: string | null
 }) {
   const [role, setRole] = useState<UserRole>(user.role)
   const [status, setStatus] = useState<UserStatus>(user.status)
@@ -210,13 +231,24 @@ function ManageUserModalForm({
           </div>
         </div>
 
+        {error && (
+          <div style={styles.errorBanner} role="alert">
+            {error}
+          </div>
+        )}
+
         {/* Actions */}
         <div style={styles.actions}>
-          <button type="button" style={styles.cancelBtn} onClick={onClose}>
+          <button type="button" style={styles.cancelBtn} onClick={onClose} disabled={submitting}>
             Cancel
           </button>
-          <button type="button" style={styles.saveBtn} onClick={handleSave}>
-            Save Changes
+          <button
+            type="button"
+            style={{ ...styles.saveBtn, ...(submitting ? styles.saveBtnDisabled : {}) }}
+            onClick={handleSave}
+            disabled={submitting}
+          >
+            {submitting ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -476,5 +508,18 @@ const styles = {
     color: '#ffffff',
     backgroundColor: '#2563eb',
     cursor: 'pointer',
+  },
+  saveBtnDisabled: {
+    opacity: 0.6,
+    cursor: 'default' as const,
+  },
+  errorBanner: {
+    marginBottom: '16px',
+    padding: '10px 14px',
+    borderRadius: '8px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#991b1b',
+    fontSize: '13px',
   },
 } as const
