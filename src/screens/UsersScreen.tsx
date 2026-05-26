@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   FiBell,
   FiChevronLeft,
@@ -14,8 +14,23 @@ import {
 } from 'react-icons/fi'
 import { CreateUserModal, type NewUserData } from '../components/CreateUserModal'
 import { ManageUserModal, type ManagedUser } from '../components/ManageUserModal'
+import { useAuth } from '../contexts/AuthContext'
+import { formatRelative } from '../lib/relativeTime'
+import {
+  buildUserResource,
+  initialsFromName,
+  parseUserPermissions,
+  parseUserRole,
+  type UserRole,
+} from '../lib/userResource'
+import {
+  listUsers,
+  registerUser,
+  updateUser,
+  updateUserStatus,
+} from '../services/usersApi'
+import type { UserDto } from '../types/user'
 
-type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
 type UserStatus = 'active' | 'inactive'
 
 type PlatformUser = {
@@ -27,6 +42,7 @@ type PlatformUser = {
   lastActive: string
   permissions: string[]
   avatar: string
+  resource: Record<string, unknown> | null
 }
 
 const ROLE_CONFIG: Record<UserRole, { label: string; bg: string; color: string }> = {
@@ -41,101 +57,137 @@ const STATUS_CONFIG: Record<UserStatus, { label: string; color: string }> = {
   inactive: { label: 'Inactive', color: '#9ca3af' },
 }
 
-const MOCK_USERS: PlatformUser[] = [
-  {
-    id: '1',
-    name: 'Alex Rivera',
-    email: 'alex.rivera@omnisync.com',
-    role: 'admin',
-    status: 'active',
-    lastActive: '2 mins ago',
-    permissions: ['Full Access', 'Billing', 'User Management'],
-    avatar: 'AR',
-  },
-  {
-    id: '2',
-    name: 'Mariana Costa',
-    email: 'mariana.costa@omnisync.com',
-    role: 'manager',
-    status: 'active',
-    lastActive: '15 mins ago',
-    permissions: ['Stock Management', 'Listings', 'Orders'],
-    avatar: 'MC',
-  },
-  {
-    id: '3',
-    name: 'Lucas Ferreira',
-    email: 'lucas.ferreira@omnisync.com',
-    role: 'editor',
-    status: 'active',
-    lastActive: '1 hour ago',
-    permissions: ['Listings', 'Stock Management'],
-    avatar: 'LF',
-  },
-  {
-    id: '4',
-    name: 'Camila Duarte',
-    email: 'camila.duarte@omnisync.com',
-    role: 'viewer',
-    status: 'inactive',
-    lastActive: '3 days ago',
-    permissions: ['View Only'],
-    avatar: 'CD',
-  },
-  {
-    id: '5',
-    name: 'Pedro Almeida',
-    email: 'pedro.almeida@omnisync.com',
-    role: 'manager',
-    status: 'active',
-    lastActive: '30 mins ago',
-    permissions: ['Stock Management', 'Marketplaces', 'Activity'],
-    avatar: 'PA',
-  },
-  {
-    id: '6',
-    name: 'Rafael Oliveira',
-    email: 'rafael.oliveira@omnisync.com',
-    role: 'admin',
-    status: 'active',
-    lastActive: '5 mins ago',
-    permissions: ['Full Access', 'Billing', 'User Management'],
-    avatar: 'RO',
-  },
-]
-
 const AVATAR_COLORS = ['#6d28d9', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#4f46e5']
 
 const ITEMS_PER_PAGE = 5
 
+function toPlatformUser(dto: UserDto): PlatformUser {
+  const role = parseUserRole(dto.resource)
+  return {
+    id: String(dto.id),
+    name: dto.name,
+    email: dto.email,
+    role,
+    status: dto.active ? 'active' : 'inactive',
+    lastActive: formatRelative(dto.createdAt),
+    permissions: parseUserPermissions(dto.resource, role),
+    avatar: initialsFromName(dto.name),
+    resource: dto.resource,
+  }
+}
+
 export function UsersScreen() {
+  const { user: authUser } = useAuth()
+  const systemClientId = authUser?.systemClientId ?? null
+
+  const [users, setUsers] = useState<PlatformUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [managingUser, setManagingUser] = useState<PlatformUser | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [saveSubmitting, setSaveSubmitting] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
-  const handleSaveUser = (updated: ManagedUser) => {
-    console.log('User updated:', updated)
-    setManagingUser(null)
-  }
+  const fetchUsers = useCallback(async () => {
+    if (systemClientId == null) return
+    setLoading(true)
+    setError(null)
+    try {
+      const all = await listUsers()
+      const tenantUsers = all
+        .filter((u) => u.systemClientId === systemClientId)
+        .map(toPlatformUser)
+      setUsers(tenantUsers)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar usuários.')
+    } finally {
+      setLoading(false)
+    }
+  }, [systemClientId])
 
-  const handleCreateUser = (data: NewUserData) => {
-    console.log('New user:', data)
-    setShowCreateModal(false)
-  }
+  useEffect(() => {
+    void fetchUsers()
+  }, [fetchUsers])
+
+  const handleSaveUser = useCallback(
+    async (updated: ManagedUser) => {
+      const existing = users.find((u) => u.id === updated.id)
+      if (!existing) return
+
+      setSaveSubmitting(true)
+      setSaveError(null)
+      try {
+        const resource = buildUserResource(existing.resource, updated.role, updated.permissions)
+        await updateUser(Number(updated.id), { resource })
+        if ((updated.status === 'active') !== (existing.status === 'active')) {
+          await updateUserStatus(Number(updated.id), updated.status === 'active')
+        }
+        setManagingUser(null)
+        await fetchUsers()
+      } catch (e) {
+        setSaveError(e instanceof Error ? e.message : 'Não foi possível salvar as alterações.')
+      } finally {
+        setSaveSubmitting(false)
+      }
+    },
+    [users, fetchUsers]
+  )
+
+  const handleCreateUser = useCallback(
+    async (data: NewUserData) => {
+      if (systemClientId == null) return
+      setCreateSubmitting(true)
+      setCreateError(null)
+      try {
+        await registerUser({
+          systemClientId,
+          name: data.name.trim(),
+          email: data.email.trim(),
+          password: data.password,
+          resource: buildUserResource(null, data.role, data.permissions),
+        })
+        setShowCreateModal(false)
+        setCreateError(null)
+        await fetchUsers()
+      } catch (e) {
+        setCreateError(e instanceof Error ? e.message : 'Não foi possível criar o usuário.')
+      } finally {
+        setCreateSubmitting(false)
+      }
+    },
+    [systemClientId, fetchUsers]
+  )
+
+  const handleDeactivateUser = useCallback(
+    async (userId: string) => {
+      setOpenMenuId(null)
+      setError(null)
+      try {
+        await updateUserStatus(Number(userId), false)
+        await fetchUsers()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Não foi possível desativar o usuário.')
+      }
+    },
+    [fetchUsers]
+  )
 
   const filteredUsers = useMemo(() => {
-    let users = MOCK_USERS
+    let result = users
 
     if (roleFilter !== 'all') {
-      users = users.filter((u) => u.role === roleFilter)
+      result = result.filter((u) => u.role === roleFilter)
     }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      users = users.filter(
+      result = result.filter(
         (u) =>
           u.name.toLowerCase().includes(q) ||
           u.email.toLowerCase().includes(q) ||
@@ -143,8 +195,8 @@ export function UsersScreen() {
       )
     }
 
-    return users
-  }, [searchQuery, roleFilter])
+    return result
+  }, [users, searchQuery, roleFilter])
 
   const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE)
   const paginatedUsers = useMemo(() => {
@@ -163,12 +215,12 @@ export function UsersScreen() {
   }
 
   const stats = useMemo(() => {
-    const total = MOCK_USERS.length
-    const active = MOCK_USERS.filter((u) => u.status === 'active').length
-    const admins = MOCK_USERS.filter((u) => u.role === 'admin').length
-    const inactive = MOCK_USERS.filter((u) => u.status === 'inactive').length
+    const total = users.length
+    const active = users.filter((u) => u.status === 'active').length
+    const admins = users.filter((u) => u.role === 'admin').length
+    const inactive = users.filter((u) => u.status === 'inactive').length
     return { total, active, admins, inactive }
-  }, [])
+  }, [users])
 
   const renderPagination = () => {
     const buttons: React.ReactNode[] = []
@@ -250,6 +302,15 @@ export function UsersScreen() {
         </div>
       </div>
 
+      {error && (
+        <div style={styles.errorBanner} role="alert">
+          <span>{error}</span>
+          <button type="button" style={styles.retryBtn} onClick={() => void fetchUsers()}>
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
       {/* Summary cards */}
       <div style={styles.summaryRow}>
         <div style={styles.summaryCard}>
@@ -258,7 +319,7 @@ export function UsersScreen() {
           </div>
           <div>
             <span style={styles.summaryLabel}>Total Users</span>
-            <span style={styles.summaryValue}>{stats.total}</span>
+            <span style={styles.summaryValue}>{loading ? '…' : stats.total}</span>
           </div>
         </div>
         <div style={styles.summaryCard}>
@@ -267,7 +328,7 @@ export function UsersScreen() {
           </div>
           <div>
             <span style={styles.summaryLabel}>Active Now</span>
-            <span style={styles.summaryValue}>{stats.active}</span>
+            <span style={styles.summaryValue}>{loading ? '…' : stats.active}</span>
           </div>
         </div>
         <div style={styles.summaryCard}>
@@ -276,7 +337,7 @@ export function UsersScreen() {
           </div>
           <div>
             <span style={styles.summaryLabel}>Admins</span>
-            <span style={styles.summaryValue}>{stats.admins}</span>
+            <span style={styles.summaryValue}>{loading ? '…' : stats.admins}</span>
           </div>
         </div>
         <div style={styles.summaryCard}>
@@ -285,7 +346,7 @@ export function UsersScreen() {
           </div>
           <div>
             <span style={styles.summaryLabel}>Inactive</span>
-            <span style={styles.summaryValue}>{stats.inactive}</span>
+            <span style={styles.summaryValue}>{loading ? '…' : stats.inactive}</span>
           </div>
         </div>
       </div>
@@ -321,7 +382,22 @@ export function UsersScreen() {
             </tr>
           </thead>
           <tbody>
-            {paginatedUsers.map((user, idx) => {
+            {loading && (
+              <tr>
+                <td colSpan={6} style={styles.emptyCell}>
+                  Carregando usuários…
+                </td>
+              </tr>
+            )}
+            {!loading && paginatedUsers.length === 0 && (
+              <tr>
+                <td colSpan={6} style={styles.emptyCell}>
+                  Nenhum usuário encontrado.
+                </td>
+              </tr>
+            )}
+            {!loading &&
+              paginatedUsers.map((user, idx) => {
               const roleCfg = ROLE_CONFIG[user.role]
               const statusCfg = STATUS_CONFIG[user.status]
               const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
@@ -392,16 +468,25 @@ export function UsersScreen() {
                         </button>
                         {openMenuId === user.id && (
                           <div style={styles.dropdown}>
-                            <button type="button" style={styles.dropdownItem}>
+                            <button
+                              type="button"
+                              style={styles.dropdownItem}
+                              onClick={() => {
+                                setOpenMenuId(null)
+                                setManagingUser(user)
+                              }}
+                            >
                               <FiShield size={14} />
                               Change Role
                             </button>
                             <button
                               type="button"
                               style={{ ...styles.dropdownItem, color: '#dc2626' }}
+                              disabled={user.status === 'inactive'}
+                              onClick={() => void handleDeactivateUser(user.id)}
                             >
                               <FiTrash2 size={14} />
-                              Remove User
+                              Deactivate User
                             </button>
                           </div>
                         )}
@@ -427,14 +512,24 @@ export function UsersScreen() {
 
       <ManageUserModal
         user={managingUser}
-        onClose={() => setManagingUser(null)}
-        onSave={handleSaveUser}
+        onClose={() => {
+          setManagingUser(null)
+          setSaveError(null)
+        }}
+        onSave={(u) => void handleSaveUser(u)}
+        submitting={saveSubmitting}
+        error={saveError}
       />
 
       <CreateUserModal
         open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSubmit={handleCreateUser}
+        onClose={() => {
+          setShowCreateModal(false)
+          setCreateError(null)
+        }}
+        onSubmit={(data) => void handleCreateUser(data)}
+        submitting={createSubmitting}
+        error={createError}
       />
     </div>
   )
@@ -820,5 +915,37 @@ const styles = {
   pageBtnDisabled: {
     opacity: 0.4,
     cursor: 'default' as const,
+  },
+
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '12px 16px',
+    marginBottom: '20px',
+    borderRadius: '10px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#991b1b',
+    fontSize: '14px',
+  },
+  retryBtn: {
+    padding: '6px 14px',
+    borderRadius: '8px',
+    border: '1px solid #fca5a5',
+    backgroundColor: '#ffffff',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#991b1b',
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  emptyCell: {
+    padding: '32px 24px',
+    textAlign: 'center' as const,
+    color: '#6b7280',
+    fontSize: '14px',
   },
 } as const

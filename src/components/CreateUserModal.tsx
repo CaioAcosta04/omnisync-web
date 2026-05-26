@@ -15,6 +15,8 @@ type CreateUserModalProps = {
   open: boolean
   onClose: () => void
   onSubmit: (data: NewUserData) => void
+  submitting?: boolean
+  error?: string | null
 }
 
 type FieldError = Partial<Record<'name' | 'email' | 'password', string>>
@@ -64,7 +66,13 @@ function validate(form: NewUserData): FieldError {
   return errors
 }
 
-export function CreateUserModal({ open, onClose, onSubmit }: CreateUserModalProps) {
+export function CreateUserModal({
+  open,
+  onClose,
+  onSubmit,
+  submitting = false,
+  error = null,
+}: CreateUserModalProps) {
   const [form, setForm] = useState<NewUserData>({ ...INITIAL_FORM })
   const [errors, setErrors] = useState<FieldError>({})
   const [touched, setTouched] = useState<Set<string>>(new Set())
@@ -103,9 +111,6 @@ export function CreateUserModal({ open, onClose, onSubmit }: CreateUserModalProp
     if (Object.keys(allErrors).length > 0) return
 
     onSubmit(form)
-    setForm({ ...INITIAL_FORM })
-    setErrors({})
-    setTouched(new Set())
   }
 
   const handleClose = () => {
@@ -261,13 +266,23 @@ export function CreateUserModal({ open, onClose, onSubmit }: CreateUserModalProp
             </div>
           </div>
 
+          {error && (
+            <div style={styles.errorBanner} role="alert">
+              {error}
+            </div>
+          )}
+
           {/* Actions */}
           <div style={styles.actions}>
-            <button type="button" style={styles.cancelBtn} onClick={handleClose}>
+            <button type="button" style={styles.cancelBtn} onClick={handleClose} disabled={submitting}>
               Cancel
             </button>
-            <button type="submit" style={styles.submitBtn}>
-              Create User
+            <button
+              type="submit"
+              style={{ ...styles.submitBtn, ...(submitting ? styles.submitBtnDisabled : {}) }}
+              disabled={submitting}
+            >
+              {submitting ? 'Creating…' : 'Create User'}
             </button>
           </div>
         </form>
@@ -504,5 +519,17 @@ const styles = {
     color: '#ffffff',
     backgroundColor: '#2563eb',
     cursor: 'pointer',
+  },
+  submitBtnDisabled: {
+    opacity: 0.6,
+    cursor: 'default' as const,
+  },
+  errorBanner: {
+    padding: '10px 14px',
+    borderRadius: '8px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#991b1b',
+    fontSize: '13px',
   },
 } as const
