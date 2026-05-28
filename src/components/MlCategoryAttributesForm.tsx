@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import {
   getAttributeUiHint,
+  getNumberUnitFallbackHint,
+  isNumberUnitField,
   type MlAttributeFieldState,
 } from '../lib/mlCategoryAttributes'
 import {
@@ -179,6 +181,61 @@ function AttributeField({
   const label = field.name || field.id
   const hint = getAttributeUiHint(field)
 
+  if (isNumberUnitField(field)) {
+    const hasUnitOptions = field.allowed_units != null && field.allowed_units.length > 0
+    if (hasUnitOptions) {
+      const numKey = `${field.id}__number`
+      const unitKey = `${field.id}__unit`
+      return (
+        <FieldShell label={label} required hint={hint} error={error}>
+          <div style={styles.numberUnitRow}>
+            <input
+              id={`ml-attr-${field.id}`}
+              type="text"
+              inputMode="decimal"
+              placeholder="0"
+              value={values[numKey] ?? ''}
+              onChange={(e) => onChange(numKey, e.target.value)}
+              onBlur={onBlur}
+              style={{ ...styles.input, flex: 1, ...(error ? styles.inputError : {}) }}
+            />
+            <select
+              value={values[unitKey] ?? field.allowed_units![0]?.id ?? ''}
+              onChange={(e) => onChange(unitKey, e.target.value)}
+              style={{ ...styles.input, width: 'auto', minWidth: '80px' }}
+            >
+              {field.allowed_units!.map((unit: MlAttributeUnitOption) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </FieldShell>
+      )
+    }
+
+    return (
+      <FieldShell
+        label={label}
+        required
+        hint={getNumberUnitFallbackHint(field)}
+        error={error}
+        htmlFor={`ml-attr-${field.id}`}
+      >
+        <input
+          id={`ml-attr-${field.id}`}
+          type="text"
+          placeholder="Ex: 3 L"
+          value={values[field.id] ?? ''}
+          onChange={(e) => onChange(field.id, e.target.value)}
+          onBlur={onBlur}
+          style={{ ...styles.input, ...(error ? styles.inputError : {}) }}
+        />
+      </FieldShell>
+    )
+  }
+
   if (valueType === 'list' && field.values && field.values.length > 0) {
     return (
       <FieldShell label={label} required hint={hint} error={error} htmlFor={`ml-attr-${field.id}`}>
@@ -227,48 +284,34 @@ function AttributeField({
     )
   }
 
-  if (valueType === 'number_unit') {
-    const numKey = `${field.id}__number`
-    const unitKey = `${field.id}__unit`
+  if (valueType === 'number') {
     return (
-      <FieldShell label={label} required hint={hint} error={error}>
-        <div style={styles.numberUnitRow}>
-          <input
-            id={`ml-attr-${field.id}`}
-            type="number"
-            step="any"
-            placeholder="0"
-            value={values[numKey] ?? ''}
-            onChange={(e) => onChange(numKey, e.target.value)}
-            onBlur={onBlur}
-            style={{ ...styles.input, flex: 1, ...(error ? styles.inputError : {}) }}
-          />
-          {field.allowed_units && field.allowed_units.length > 0 ? (
-            <select
-              value={values[unitKey] ?? field.allowed_units[0]?.id ?? ''}
-              onChange={(e) => onChange(unitKey, e.target.value)}
-              style={{ ...styles.input, width: 'auto', minWidth: '80px' }}
-            >
-              {field.allowed_units.map((unit: MlAttributeUnitOption) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-        </div>
+      <FieldShell
+        label={label}
+        required
+        hint={hint ?? 'Informe apenas o número (ex: 500).'}
+        error={error}
+        htmlFor={`ml-attr-${field.id}`}
+      >
+        <input
+          id={`ml-attr-${field.id}`}
+          type="text"
+          inputMode="decimal"
+          placeholder="Ex: 500"
+          value={values[field.id] ?? ''}
+          onChange={(e) => onChange(field.id, e.target.value)}
+          onBlur={onBlur}
+          style={{ ...styles.input, ...(error ? styles.inputError : {}) }}
+        />
       </FieldShell>
     )
   }
-
-  const inputType = valueType === 'number' ? 'number' : 'text'
 
   return (
     <FieldShell label={label} required hint={hint} error={error} htmlFor={`ml-attr-${field.id}`}>
       <input
         id={`ml-attr-${field.id}`}
-        type={inputType}
-        step={inputType === 'number' ? 'any' : undefined}
+        type="text"
         placeholder={`Informe ${label.toLowerCase()}`}
         value={values[field.id] ?? ''}
         onChange={(e) => onChange(field.id, e.target.value)}

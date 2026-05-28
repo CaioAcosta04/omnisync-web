@@ -54,6 +54,48 @@ function normalizeDefinition(raw: Partial<MlAttributeDefinition>): MlAttributeDe
   }
 }
 
+function catalogAttributes(response: MlCategoryRequirementsResponse): MlAttributeDefinition[] {
+  return (response.attributes ?? [])
+    .map((raw) => normalizeDefinition(raw as Partial<MlAttributeDefinition>))
+    .filter((def): def is MlAttributeDefinition => def != null)
+}
+
+/** Completa metadados esparsos (technical_specs) com a definição completa do catálogo. */
+function enrichFromCatalog(
+  field: MlAttributeDefinition,
+  catalog: MlAttributeDefinition[]
+): MlAttributeDefinition {
+  const full = catalog.find((a) => a.id === field.id)
+  if (!full) return field
+
+  return {
+    ...field,
+    name: field.name || full.name,
+    value_type: full.value_type ?? field.value_type,
+    allowed_units: full.allowed_units?.length ? full.allowed_units : field.allowed_units,
+    values: full.values?.length ? full.values : field.values,
+    hint: full.hint ?? field.hint,
+    tags: full.tags ?? field.tags,
+    component: full.component ?? field.component,
+    group_label: field.group_label ?? full.group_label,
+  }
+}
+
+/** Campo que exige valor + unidade (ex: capacidade 3 L). */
+export function isNumberUnitField(field: MlAttributeDefinition): boolean {
+  if (field.value_type === 'number_unit') return true
+  if (field.allowed_units != null && field.allowed_units.length > 0) return true
+  const component = String(field.component ?? '').toUpperCase()
+  return component.includes('NUMBER_UNIT') || component === 'QUANTITY'
+}
+
+export const NUMBER_UNIT_TEXT_HINT =
+  'Informe valor e unidade (ex: 3 L, 500 ml).'
+
+export function getNumberUnitFallbackHint(field: MlAttributeDefinition): string {
+  return field.hint?.trim() || NUMBER_UNIT_TEXT_HINT
+}
+
 /** Mescla obrigatórios de technical_specs + tags da lista completa de attributes. */
 export function mergeRequiredAttributes(
   response: MlCategoryRequirementsResponse
@@ -71,6 +113,11 @@ export function mergeRequiredAttributes(
     if (!byId.has(def.id)) {
       byId.set(def.id, def)
     }
+  }
+
+  const catalog = catalogAttributes(response)
+  for (const [id, field] of byId) {
+    byId.set(id, enrichFromCatalog(field, catalog))
   }
 
   return Array.from(byId.values())
@@ -114,9 +161,9 @@ export function buildInitialFieldState(fields: MlAttributeDefinition[]): MlAttri
   for (const field of fields) {
     if (field.value_type === 'boolean') {
       state[field.id] = ''
-    } else if (field.value_type === 'number_unit') {
+    } else if (isNumberUnitField(field) && field.allowed_units != null && field.allowed_units.length > 0) {
       state[`${field.id}__number`] = ''
-      state[`${field.id}__unit`] = field.allowed_units?.[0]?.id ?? ''
+      state[`${field.id}__unit`] = field.allowed_units[0]?.id ?? ''
     } else {
       state[field.id] = ''
     }
@@ -161,16 +208,23 @@ export function serializeAttributes(
       continue
     }
 
-    if (valueType === 'number_unit') {
-      const num = (state[`${field.id}__number`] ?? '').trim()
-      const unitId = (state[`${field.id}__unit`] ?? '').trim()
-      if (!num) continue
-      const unit = field.allowed_units?.find((u) => u.id === unitId)
-      const unitLabel = unit?.name ?? unitId
-      result.push({
-        id: field.id,
-        value_name: unitLabel ? `${num} ${unitLabel}` : num,
-      })
+    if (isNumberUnitField(field)) {
+      const hasUnitOptions = field.allowed_units != null && field.allowed_units.length > 0
+      if (hasUnitOptions) {
+        const num = (state[`${field.id}__number`] ?? '').trim()
+        const unitId = (state[`${field.id}__unit`] ?? '').trim()
+        if (!num) continue
+        const unit = field.allowed_units!.find((u) => u.id === unitId)
+        const unitLabel = unit?.name ?? unitId
+        result.push({
+          id: field.id,
+          value_name: unitLabel ? `${num} ${unitLabel}` : num,
+        })
+      } else {
+        const combined = (state[field.id] ?? '').trim()
+        if (!combined) continue
+        result.push({ id: field.id, value_name: combined })
+      }
       continue
     }
 
@@ -179,6 +233,11 @@ export function serializeAttributes(
 
     if (isGtinAttributeId(field.id)) {
       result.push({ id: field.id, value_name: normalizeGtinInput(valueName) })
+      continue
+    }
+
+    if (valueType === 'number') {
+      result.push({ id: field.id, value_name: valueName.replace(',', '.') })
       continue
     }
 
@@ -249,12 +308,27 @@ export function validateAttributeFields(
       continue
     }
 
-    if (valueType === 'number_unit') {
-      const num = (state[`${field.id}__number`] ?? '').trim()
-      if (!num) {
+    if (isNumberUnitField(field)) {
+      const hasUnitOptions = field.allowed_units != null && field.allowed_units.length > 0
+      if (hasUnitOptions) {
+        const num = (state[`${field.id}__number`] ?? '').trim()
+        if (!num) {
+          errors[field.id] = `${label} é obrigatório.`
+        } else if (Number.isNaN(Number(num))) {
+          errors[field.id] = `${label} deve ser um número.`
+        }
+      } else if (!(state[field.id] ?? '').trim()) {
         errors[field.id] = `${label} é obrigatório.`
-      } else if (Number.isNaN(Number(num))) {
-        errors[field.id] = `${label} deve ser um número.`
+      }
+      continue
+    }
+
+    if (valueType === 'number') {
+      const raw = (state[field.id] ?? '').trim()
+      if (!raw) {
+        errors[field.id] = `${label} é obrigatório.`
+      } else if (!/^-?\d+([.,]\d+)?$/.test(raw)) {
+        errors[field.id] = `${label} deve ser um número (use ponto ou vírgula para decimais).`
       }
       continue
     }
