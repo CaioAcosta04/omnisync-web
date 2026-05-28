@@ -6,14 +6,15 @@ import {
   FiChevronRight,
   FiClock,
   FiExternalLink,
-  FiImage,
   FiRefreshCw,
   FiSearch,
   FiShoppingBag,
   FiXCircle,
 } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
+import { getProductImageUrl } from '../lib/productImage'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
+import { ProductImageThumb } from '../components/ProductImageThumb'
 import { formatRelative } from '../lib/relativeTime'
 import { listProducts, syncMercadoLivreProducts } from '../services/productsApi'
 import type { ProductDto } from '../types/product'
@@ -29,6 +30,7 @@ type MlListing = {
   itemId: string
   title: string
   sku: string
+  imageUrl: string | null
   available: number
   price: number
   status: MlListingStatus
@@ -74,6 +76,7 @@ function toMlListing(p: ProductDto): MlListing | null {
     itemId: String(ml.item_id),
     title: p.name,
     sku: p.sku,
+    imageUrl: getProductImageUrl(p),
     available: Math.max(0, p.stock - p.reserved_stock),
     price: p.price,
     status: normalizeStatus(ml.status),
@@ -452,9 +455,7 @@ export function ListingsScreen() {
                         <tr key={listing.productId} style={styles.tr}>
                           <td style={{ ...styles.td, ...styles.tdFirst }}>
                             <div style={styles.titleCell}>
-                              <div style={styles.listingIcon}>
-                                <FiImage size={18} color="#9ca3af" />
-                              </div>
+                              <ProductImageThumb src={listing.imageUrl} alt={listing.title} size={40} />
                               <div>
                                 <span style={styles.listingTitle}>{listing.title}</span>
                                 <span style={styles.listingSku}>SKU: {listing.sku}</span>

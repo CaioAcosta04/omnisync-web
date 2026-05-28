@@ -5,7 +5,6 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiDownload,
-  FiImage,
   FiPlus,
   FiSearch,
   FiSliders,
@@ -13,9 +12,11 @@ import {
   FiTrendingUp,
 } from 'react-icons/fi'
 import { AddProductModal, type NewProductData } from '../components/AddProductModal'
+import { ProductImageThumb } from '../components/ProductImageThumb'
 import { StockEmptyState } from '../components/StockEmptyState'
 import { useAuth } from '../contexts/AuthContext'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
+import { getProductImageUrl } from '../lib/productImage'
 import { formatRelative } from '../lib/relativeTime'
 import { createProduct, listProducts } from '../services/productsApi'
 import type { ProductCreateRequest, ProductDto } from '../types/product'
@@ -31,6 +32,7 @@ type TableRow = {
   id: number
   name: string
   sku: string
+  imageUrl: string | null
   availableQty: number
   marketplaces: MarketplaceBadge[]
   lastUpdate: string
@@ -65,6 +67,7 @@ function toTableRow(p: ProductDto): TableRow {
     id: p.id,
     name: p.name,
     sku: p.sku,
+    imageUrl: getProductImageUrl(p),
     availableQty,
     marketplaces,
     lastUpdate: formatRelative(p.created_at),
@@ -119,6 +122,9 @@ export function StockScreen() {
     try {
       // Only set announcement=true when mlMetadata is actually present — defensive guard
       const hasMLMetadata = data.mlMetadata != null
+      const resource: Record<string, unknown> = {}
+      if (data.imageResource?.length) resource.images = data.imageResource
+      if (hasMLMetadata) resource.mercado_livre = data.mlMetadata
       const payload: ProductCreateRequest = {
         system_client_id: systemClientId,
         name: data.name,
@@ -128,7 +134,7 @@ export function StockScreen() {
         reserved_stock: data.reservedStock,
         price: data.price,
         announcement: data.announcement && hasMLMetadata,
-        resource: hasMLMetadata ? { mercado_livre: data.mlMetadata! } : {},
+        resource,
       }
       await createProduct(systemClientId, payload)
       setShowAddModal(false)
@@ -390,9 +396,7 @@ export function StockScreen() {
                     <tr key={row.id} style={styles.tr}>
                       <td style={{ ...styles.td, ...styles.tdFirst }}>
                         <div style={styles.productNameCell}>
-                          <div style={styles.productIcon}>
-                            <FiImage size={18} color="#9ca3af" />
-                          </div>
+                          <ProductImageThumb src={row.imageUrl} alt={row.name} size={40} />
                           <span style={styles.productName}>{row.name}</span>
                         </div>
                       </td>

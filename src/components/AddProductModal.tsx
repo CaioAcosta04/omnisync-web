@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FiDollarSign, FiHash, FiImage, FiPackage, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiX } from 'react-icons/fi'
+import { FiDollarSign, FiHash, FiPackage, FiRefreshCw, FiSearch, FiX } from 'react-icons/fi'
 import { MlCategoryAttributesForm } from './MlCategoryAttributesForm'
+import { ProductPicturesEditor } from './ProductPicturesEditor'
 import {
   buildInitialFieldState,
   mergeRequiredAttributesWithGtinReason,
@@ -10,6 +11,13 @@ import {
 } from '../lib/mlCategoryAttributes'
 import type { MlAttributeDefinition } from '../types/mercadolivreCatalog'
 import { fetchCategoryRequirements, searchCategorySuggestions, type MlCategorySuggestion } from '../services/mercadoLivreCatalogApi'
+import {
+  createEmptyPicture,
+  toMercadoLivrePictures,
+  toResourceImages,
+  validatePictures,
+  type ProductPictureEntry,
+} from '../lib/productPictures'
 import type { MercadoLivreProductMetadata } from '../types/product'
 
 export type NewProductData = {
@@ -20,6 +28,7 @@ export type NewProductData = {
   stock: number
   reservedStock: number
   announcement: boolean
+  imageResource?: Array<{ url: string }>
   mlMetadata?: MercadoLivreProductMetadata
 }
 
@@ -42,8 +51,6 @@ type MlErrors = {
   attributeFields?: Record<string, string>
 }
 
-const URL_REGEX = /^https?:\/\/.+/
-
 function validateBase(form: BaseFields): BaseErrors {
   const errors: BaseErrors = {}
   if (!form.name.trim()) errors.name = 'Product name is required.'
@@ -61,15 +68,15 @@ function validateBase(form: BaseFields): BaseErrors {
 function validateMl(
   announcement: boolean,
   category: MlCategorySuggestion | null,
-  pictures: string[],
+  pictures: ProductPictureEntry[],
   attributeFields: MlAttributeDefinition[],
   attributeValues: MlAttributeFieldState
 ): MlErrors {
   if (!announcement) return {}
   const errors: MlErrors = {}
   if (!category) errors.category = 'Selecione uma categoria.'
-  const validPics = pictures.filter((u) => u.trim() && URL_REGEX.test(u.trim()))
-  if (validPics.length === 0) errors.pictures = 'Adicione ao menos uma URL de imagem válida (http/https).'
+  const pictureError = validatePictures(pictures, true)
+  if (pictureError) errors.pictures = pictureError
   if (attributeFields.length > 0) {
     const fieldErrors = validateAttributeFields(attributeFields, attributeValues)
     if (Object.keys(fieldErrors).length > 0) {
@@ -102,7 +109,7 @@ export function AddProductModal({
   const [mlSuggestions, setMlSuggestions] = useState<MlCategorySuggestion[]>([])
   const [mlSuggestionsOpen, setMlSuggestionsOpen] = useState(false)
   const [mlCategoryLoading, setMlCategoryLoading] = useState(false)
-  const [mlPictures, setMlPictures] = useState<string[]>([''])
+  const [mlPictures, setMlPictures] = useState<ProductPictureEntry[]>(() => [createEmptyPicture()])
   const [mlErrors, setMlErrors] = useState<MlErrors>({})
   const [mlAttributeFields, setMlAttributeFields] = useState<MlAttributeDefinition[]>([])
   const [mlAttributeValues, setMlAttributeValues] = useState<MlAttributeFieldState>({})
@@ -124,7 +131,7 @@ export function AddProductModal({
     setMlSuggestions([])
     setMlSuggestionsOpen(false)
     setMlCategoryLoading(false)
-    setMlPictures([''])
+    setMlPictures([createEmptyPicture()])
     setMlErrors({})
     setMlAttributeFields([])
     setMlAttributeValues({})
@@ -239,14 +246,7 @@ export function AddProductModal({
     void loadCategoryAttributes(cat.category_id)
   }
 
-  // Pictures
-  const setPicture = (index: number, value: string) => {
-    setMlPictures((prev) => prev.map((u, i) => (i === index ? value : u)))
-    setMlErrors((prev) => ({ ...prev, pictures: undefined }))
-  }
-  const addPicture = () => setMlPictures((prev) => [...prev, ''])
-  const removePicture = (index: number) =>
-    setMlPictures((prev) => prev.length === 1 ? [''] : prev.filter((_, i) => i !== index))
+  // Pictures handled via ProductPicturesEditor
 
   const handleClose = () => {
     if (submitting) return
@@ -279,20 +279,18 @@ export function AddProductModal({
     if (announcement && mlAttributesLoading) return
     if (announcement && mlCategory && mlAttributesError && mlAttributeFields.length === 0) return
 
-    const validPics = mlPictures
-      .map((u) => u.trim())
-      .filter((u) => u && URL_REGEX.test(u))
-      .map((source) => ({ source }))
+    const mlPicturesPayload = toMercadoLivrePictures(mlPictures)
+    const imageResource = toResourceImages(mlPictures)
 
     const serializedAttributes =
       mlAttributeFields.length > 0 ? serializeAttributes(mlAttributeFields, mlAttributeValues) : undefined
 
     const mlMetadata: MercadoLivreProductMetadata | undefined =
-      announcement && mlCategory
+      announcement && mlCategory && mlPicturesPayload.length > 0
         ? {
             category_id: mlCategory.category_id,
             condition: mlCondition,
-            pictures: validPics,
+            pictures: mlPicturesPayload,
             ...(serializedAttributes && serializedAttributes.length > 0
               ? { attributes: serializedAttributes }
               : {}),
@@ -302,6 +300,7 @@ export function AddProductModal({
     await onSubmit({
       ...form,
       announcement: mlConnected && announcement,
+      imageResource: imageResource.length > 0 ? imageResource : undefined,
       mlMetadata,
     })
   }
@@ -449,6 +448,23 @@ export function AddProductModal({
               </div>
               {baseErrors.reservedStock && <span style={styles.errorMsg}>{baseErrors.reservedStock}</span>}
             </div>
+          </div>
+
+          {/* Product images */}
+          <div style={styles.field}>
+            <label style={styles.label}>
+              Imagens do produto
+              {announcement ? <span style={styles.required}> *</span> : null}
+            </label>
+            <ProductPicturesEditor
+              entries={mlPictures}
+              onChange={(next) => {
+                setMlPictures(next)
+                setMlErrors((prev) => ({ ...prev, pictures: undefined }))
+              }}
+              error={mlErrors.pictures}
+              required={announcement}
+            />
           </div>
 
           {/* ML announcement checkbox — only when mlConnected */}
@@ -602,50 +618,6 @@ export function AddProductModal({
                         </button>
                       ))}
                     </div>
-                  </div>
-
-                  {/* Pictures */}
-                  <div style={styles.field}>
-                    <label style={styles.label}>
-                      Fotos (URL) <span style={styles.required}>*</span>
-                    </label>
-                    <div style={styles.picturesWrap}>
-                      {mlPictures.map((url, i) => (
-                        <div key={i} style={styles.pictureRow}>
-                          <div
-                            style={{
-                              ...styles.inputWrap,
-                              flex: 1,
-                              ...(mlErrors.pictures && !URL_REGEX.test(url.trim()) && url.trim()
-                                ? styles.inputWrapError
-                                : {}),
-                            }}
-                          >
-                            <FiImage size={16} color="#9ca3af" />
-                            <input
-                              type="url"
-                              placeholder="https://..."
-                              value={url}
-                              onChange={(e) => setPicture(i, e.target.value)}
-                              style={styles.input}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            style={styles.removePicBtn}
-                            onClick={() => removePicture(i)}
-                            aria-label="Remover foto"
-                          >
-                            <FiTrash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                      <button type="button" style={styles.addPicBtn} onClick={addPicture}>
-                        <FiPlus size={14} />
-                        Adicionar foto
-                      </button>
-                    </div>
-                    {mlErrors.pictures && <span style={styles.errorMsg}>{mlErrors.pictures}</span>}
                   </div>
                 </div>
               )}
