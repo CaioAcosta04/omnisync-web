@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FiDollarSign, FiHash, FiImage, FiPackage, FiPlus, FiSearch, FiTrash2, FiX } from 'react-icons/fi'
-import { searchCategorySuggestions, type MlCategorySuggestion } from '../services/mercadoLivreCatalogApi'
+import { FiDollarSign, FiHash, FiImage, FiPackage, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiX } from 'react-icons/fi'
+import { MlCategoryAttributesForm } from './MlCategoryAttributesForm'
+import {
+  buildInitialFieldState,
+  mergeRequiredAttributes,
+  serializeAttributes,
+  validateAttributeFields,
+  type MlAttributeFieldState,
+} from '../lib/mlCategoryAttributes'
+import type { MlAttributeDefinition } from '../types/mercadolivreCatalog'
+import { fetchCategoryRequirements, searchCategorySuggestions, type MlCategorySuggestion } from '../services/mercadoLivreCatalogApi'
 import type { MercadoLivreProductMetadata } from '../types/product'
 
 export type NewProductData = {
@@ -29,6 +38,8 @@ type BaseErrors = Partial<Record<keyof BaseFields, string>>
 type MlErrors = {
   category?: string
   pictures?: string
+  attributes?: string
+  attributeFields?: Record<string, string>
 }
 
 const URL_REGEX = /^https?:\/\/.+/
@@ -50,13 +61,21 @@ function validateBase(form: BaseFields): BaseErrors {
 function validateMl(
   announcement: boolean,
   category: MlCategorySuggestion | null,
-  pictures: string[]
+  pictures: string[],
+  attributeFields: MlAttributeDefinition[],
+  attributeValues: MlAttributeFieldState
 ): MlErrors {
   if (!announcement) return {}
   const errors: MlErrors = {}
   if (!category) errors.category = 'Selecione uma categoria.'
   const validPics = pictures.filter((u) => u.trim() && URL_REGEX.test(u.trim()))
   if (validPics.length === 0) errors.pictures = 'Adicione ao menos uma URL de imagem válida (http/https).'
+  if (attributeFields.length > 0) {
+    const fieldErrors = validateAttributeFields(attributeFields, attributeValues)
+    if (Object.keys(fieldErrors).length > 0) {
+      errors.attributeFields = fieldErrors
+    }
+  }
   return errors
 }
 
@@ -85,9 +104,14 @@ export function AddProductModal({
   const [mlCategoryLoading, setMlCategoryLoading] = useState(false)
   const [mlPictures, setMlPictures] = useState<string[]>([''])
   const [mlErrors, setMlErrors] = useState<MlErrors>({})
+  const [mlAttributeFields, setMlAttributeFields] = useState<MlAttributeDefinition[]>([])
+  const [mlAttributeValues, setMlAttributeValues] = useState<MlAttributeFieldState>({})
+  const [mlAttributesLoading, setMlAttributesLoading] = useState(false)
+  const [mlAttributesError, setMlAttributesError] = useState<string | null>(null)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const categoryInputRef = useRef<HTMLInputElement>(null)
+  const attributesRequestRef = useRef(0)
 
   const resetAll = useCallback(() => {
     setForm({ ...INITIAL_BASE })
@@ -102,6 +126,10 @@ export function AddProductModal({
     setMlCategoryLoading(false)
     setMlPictures([''])
     setMlErrors({})
+    setMlAttributeFields([])
+    setMlAttributeValues({})
+    setMlAttributesLoading(false)
+    setMlAttributesError(null)
   }, [])
 
   // Reset when modal opens
@@ -126,10 +154,61 @@ export function AddProductModal({
     setBaseErrors((prev) => ({ ...prev, [key]: newErrors[key] }))
   }
 
+  const resetCategoryAttributes = useCallback(() => {
+    setMlAttributeFields([])
+    setMlAttributeValues({})
+    setMlAttributesLoading(false)
+    setMlAttributesError(null)
+    setMlErrors((prev) => {
+      const next = { ...prev }
+      delete next.attributes
+      delete next.attributeFields
+      return next
+    })
+  }, [])
+
+  const loadCategoryAttributes = useCallback(
+    async (categoryId: string) => {
+      if (systemClientId == null) return
+      const requestId = ++attributesRequestRef.current
+      setMlAttributesLoading(true)
+      setMlAttributesError(null)
+      setMlAttributeFields([])
+      setMlAttributeValues({})
+
+      try {
+        const requirements = await fetchCategoryRequirements(systemClientId, categoryId)
+        if (requestId !== attributesRequestRef.current) return
+
+        const fields = mergeRequiredAttributes(requirements)
+        setMlAttributeFields(fields)
+        setMlAttributeValues(buildInitialFieldState(fields))
+
+        if (fields.length === 0) {
+          setMlAttributesError(
+            'Nenhum atributo obrigatório encontrado para esta categoria. O anúncio pode falhar na publicação.'
+          )
+        }
+      } catch (e) {
+        if (requestId !== attributesRequestRef.current) return
+        const msg = e instanceof Error ? e.message : 'Erro ao carregar atributos da categoria.'
+        setMlAttributesError(msg)
+        setMlAttributeFields([])
+        setMlAttributeValues({})
+      } finally {
+        if (requestId === attributesRequestRef.current) {
+          setMlAttributesLoading(false)
+        }
+      }
+    },
+    [systemClientId]
+  )
+
   // Category autocomplete
   const handleCategoryQueryChange = (q: string) => {
     setMlCategoryQuery(q)
     setMlCategory(null)
+    resetCategoryAttributes()
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (!q.trim() || systemClientId == null) {
       setMlSuggestions([])
@@ -156,7 +235,8 @@ export function AddProductModal({
     setMlCategoryQuery(cat.category_name)
     setMlSuggestions([])
     setMlSuggestionsOpen(false)
-    setMlErrors((prev) => ({ ...prev, category: undefined }))
+    setMlErrors((prev) => ({ ...prev, category: undefined, attributes: undefined, attributeFields: undefined }))
+    void loadCategoryAttributes(cat.category_id)
   }
 
   // Pictures
@@ -179,19 +259,44 @@ export function AddProductModal({
     setBaseErrors(allBaseErrors)
     setTouched(new Set(Object.keys(form) as (keyof BaseFields)[]))
 
-    const allMlErrors = validateMl(announcement, mlCategory, mlPictures)
+    const allMlErrors = validateMl(
+      announcement,
+      mlCategory,
+      mlPictures,
+      mlAttributeFields,
+      mlAttributeValues
+    )
     setMlErrors(allMlErrors)
 
-    if (Object.keys(allBaseErrors).length > 0 || Object.keys(allMlErrors).length > 0) return
+    if (
+      Object.keys(allBaseErrors).length > 0 ||
+      Object.keys(allMlErrors).filter((k) => k !== 'attributeFields').length > 0 ||
+      (allMlErrors.attributeFields && Object.keys(allMlErrors.attributeFields).length > 0)
+    ) {
+      return
+    }
+
+    if (announcement && mlAttributesLoading) return
+    if (announcement && mlCategory && mlAttributesError && mlAttributeFields.length === 0) return
 
     const validPics = mlPictures
       .map((u) => u.trim())
       .filter((u) => u && URL_REGEX.test(u))
       .map((source) => ({ source }))
 
+    const serializedAttributes =
+      mlAttributeFields.length > 0 ? serializeAttributes(mlAttributeFields, mlAttributeValues) : undefined
+
     const mlMetadata: MercadoLivreProductMetadata | undefined =
       announcement && mlCategory
-        ? { category_id: mlCategory.category_id, condition: mlCondition, pictures: validPics }
+        ? {
+            category_id: mlCategory.category_id,
+            condition: mlCondition,
+            pictures: validPics,
+            ...(serializedAttributes && serializedAttributes.length > 0
+              ? { attributes: serializedAttributes }
+              : {}),
+          }
         : undefined
 
     await onSubmit({
@@ -439,6 +544,44 @@ export function AddProductModal({
                       </span>
                     )}
                   </div>
+
+                  {/* Category-specific required attributes */}
+                  {mlCategory && (
+                    <div style={styles.mlAttributesBlock}>
+                      {mlAttributesLoading ? (
+                        <div style={styles.attributesLoading}>
+                          <div style={styles.miniSpinner} />
+                          <span>Carregando campos da categoria…</span>
+                        </div>
+                      ) : null}
+
+                      {mlAttributesError ? (
+                        <div style={styles.attributesErrorBanner} role="alert">
+                          <span>{mlAttributesError}</span>
+                          <button
+                            type="button"
+                            style={styles.retryAttributesBtn}
+                            onClick={() => void loadCategoryAttributes(mlCategory.category_id)}
+                          >
+                            <FiRefreshCw size={13} />
+                            Tentar novamente
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {!mlAttributesLoading && mlAttributeFields.length > 0 ? (
+                        <MlCategoryAttributesForm
+                          fields={mlAttributeFields}
+                          values={mlAttributeValues}
+                          errors={mlErrors.attributeFields ?? {}}
+                          onChange={(next) => {
+                            setMlAttributeValues(next)
+                            setMlErrors((prev) => ({ ...prev, attributeFields: undefined }))
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  )}
 
                   {/* Condition */}
                   <div style={styles.field}>
@@ -793,6 +936,48 @@ const styles = {
   categorySelected: {
     fontSize: '12px',
     color: '#6b7280',
+  },
+  mlAttributesBlock: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '12px',
+    padding: '12px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #fde68a',
+    borderRadius: '8px',
+  },
+  attributesLoading: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    fontSize: '13px',
+    color: '#6b7280',
+  },
+  attributesErrorBanner: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '8px',
+    padding: '10px 12px',
+    borderRadius: '8px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    color: '#991b1b',
+    fontSize: '13px',
+  },
+  retryAttributesBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    alignSelf: 'flex-start' as const,
+    padding: '6px 12px',
+    borderRadius: '6px',
+    border: '1px solid #fecaca',
+    backgroundColor: '#ffffff',
+    color: '#991b1b',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
   },
 
   /* Condition toggle */
