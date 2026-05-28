@@ -1,0 +1,269 @@
+import type { ReactNode } from 'react'
+import type { MlAttributeDefinition, MlAttributeUnitOption, MlAttributeValueOption } from '../types/mercadolivreCatalog'
+import type { MlAttributeFieldState } from '../lib/mlCategoryAttributes'
+
+type MlCategoryAttributesFormProps = {
+  fields: MlAttributeDefinition[]
+  values: MlAttributeFieldState
+  errors: Record<string, string>
+  onChange: (next: MlAttributeFieldState) => void
+  onFieldBlur?: (fieldId: string) => void
+}
+
+export function MlCategoryAttributesForm({
+  fields,
+  values,
+  errors,
+  onChange,
+  onFieldBlur,
+}: MlCategoryAttributesFormProps) {
+  if (fields.length === 0) return null
+
+  const setField = (key: string, value: string) => {
+    onChange({ ...values, [key]: value })
+  }
+
+  return (
+    <div style={styles.wrap}>
+      <p style={styles.sectionTitle}>Atributos obrigatórios da categoria</p>
+      <div style={styles.fields}>
+        {fields.map((field) => (
+          <AttributeField
+            key={field.id}
+            field={field}
+            values={values}
+            error={errors[field.id]}
+            onChange={setField}
+            onBlur={() => onFieldBlur?.(field.id)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AttributeField({
+  field,
+  values,
+  error,
+  onChange,
+  onBlur,
+}: {
+  field: MlAttributeDefinition
+  values: MlAttributeFieldState
+  error?: string
+  onChange: (key: string, value: string) => void
+  onBlur: () => void
+}) {
+  const valueType = field.value_type ?? 'string'
+  const label = field.name || field.id
+
+  if (valueType === 'list' && field.values && field.values.length > 0) {
+    return (
+      <FieldShell label={label} required hint={field.hint} error={error} htmlFor={`ml-attr-${field.id}`}>
+        <select
+          id={`ml-attr-${field.id}`}
+          value={values[field.id] ?? ''}
+          onChange={(e) => onChange(field.id, e.target.value)}
+          onBlur={onBlur}
+          style={{ ...styles.input, ...(error ? styles.inputError : {}) }}
+        >
+          <option value="">Selecione…</option>
+          {field.values.map((opt: MlAttributeValueOption) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.name}
+            </option>
+          ))}
+        </select>
+      </FieldShell>
+    )
+  }
+
+  if (valueType === 'boolean') {
+    return (
+      <FieldShell label={label} required hint={field.hint} error={error}>
+        <div style={styles.toggleRow}>
+          {[
+            { value: 'Sim', label: 'Sim' },
+            { value: 'Não', label: 'Não' },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              style={{
+                ...styles.toggleBtn,
+                ...(values[field.id] === opt.value ? styles.toggleBtnActive : {}),
+              }}
+              onClick={() => onChange(field.id, opt.value)}
+              onBlur={onBlur}
+              aria-pressed={values[field.id] === opt.value}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </FieldShell>
+    )
+  }
+
+  if (valueType === 'number_unit') {
+    const numKey = `${field.id}__number`
+    const unitKey = `${field.id}__unit`
+    return (
+      <FieldShell label={label} required hint={field.hint} error={error}>
+        <div style={styles.numberUnitRow}>
+          <input
+            id={`ml-attr-${field.id}`}
+            type="number"
+            step="any"
+            placeholder="0"
+            value={values[numKey] ?? ''}
+            onChange={(e) => onChange(numKey, e.target.value)}
+            onBlur={onBlur}
+            style={{ ...styles.input, flex: 1, ...(error ? styles.inputError : {}) }}
+          />
+          {field.allowed_units && field.allowed_units.length > 0 ? (
+            <select
+              value={values[unitKey] ?? field.allowed_units[0]?.id ?? ''}
+              onChange={(e) => onChange(unitKey, e.target.value)}
+              style={{ ...styles.input, width: 'auto', minWidth: '80px' }}
+            >
+              {field.allowed_units.map((unit: MlAttributeUnitOption) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
+      </FieldShell>
+    )
+  }
+
+  const inputType = valueType === 'number' ? 'number' : 'text'
+
+  return (
+    <FieldShell label={label} required hint={field.hint} error={error} htmlFor={`ml-attr-${field.id}`}>
+      <input
+        id={`ml-attr-${field.id}`}
+        type={inputType}
+        step={inputType === 'number' ? 'any' : undefined}
+        placeholder={`Informe ${label.toLowerCase()}`}
+        value={values[field.id] ?? ''}
+        onChange={(e) => onChange(field.id, e.target.value)}
+        onBlur={onBlur}
+        style={{ ...styles.input, ...(error ? styles.inputError : {}) }}
+      />
+    </FieldShell>
+  )
+}
+
+function FieldShell({
+  label,
+  required,
+  hint,
+  error,
+  htmlFor,
+  children,
+}: {
+  label: string
+  required?: boolean
+  hint?: string
+  error?: string
+  htmlFor?: string
+  children: ReactNode
+}) {
+  return (
+    <div style={styles.field}>
+      <label style={styles.label} htmlFor={htmlFor}>
+        {label}
+        {required ? <span style={styles.required}> *</span> : null}
+      </label>
+      {hint ? <span style={styles.hint}>{hint}</span> : null}
+      {children}
+      {error ? <span style={styles.errorMsg}>{error}</span> : null}
+    </div>
+  )
+}
+
+const styles = {
+  wrap: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '12px',
+  },
+  sectionTitle: {
+    margin: 0,
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#78350f',
+  },
+  fields: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '14px',
+  },
+  field: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '4px',
+  },
+  label: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#374151',
+  },
+  required: {
+    color: '#dc2626',
+  },
+  hint: {
+    fontSize: '11px',
+    color: '#9ca3af',
+    lineHeight: 1.4,
+  },
+  input: {
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    color: '#111827',
+    backgroundColor: '#ffffff',
+    boxSizing: 'border-box' as const,
+  },
+  inputError: {
+    borderColor: '#fca5a5',
+  },
+  errorMsg: {
+    fontSize: '12px',
+    color: '#dc2626',
+    fontWeight: 500,
+  },
+  toggleRow: {
+    display: 'flex',
+    gap: '8px',
+  },
+  toggleBtn: {
+    padding: '8px 18px',
+    borderRadius: '8px',
+    border: '1.5px solid #e5e7eb',
+    backgroundColor: '#ffffff',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#374151',
+    cursor: 'pointer',
+  },
+  toggleBtnActive: {
+    borderColor: '#f59e0b',
+    backgroundColor: '#fffbeb',
+    color: '#92400e',
+    fontWeight: 600,
+  },
+  numberUnitRow: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+  },
+} as const
