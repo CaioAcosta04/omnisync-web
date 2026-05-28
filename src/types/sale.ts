@@ -2,6 +2,16 @@ export type SaleChannel = 'MERCADO_LIVRE' | 'SHOPEE' | 'AMAZON' | 'PHYSICAL' | '
 
 export type SaleStatus = 'CONFIRMED' | 'CANCELLED'
 
+export type SaleCreateRequest = {
+  systemClientId: number
+  productId: number
+  quantity: number
+  totalValue: number
+  channel: SaleChannel
+  externalReferenceId?: string | null
+  resource?: Record<string, unknown> | null
+}
+
 export type SaleLogDto = {
   id: number
   sale_id: number

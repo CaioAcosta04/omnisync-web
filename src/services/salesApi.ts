@@ -1,6 +1,6 @@
 import { apiFetch } from '../lib/apiFetch'
 import type { PageResponse } from '../types/page'
-import type { SaleDto } from '../types/sale'
+import type { SaleCreateRequest, SaleDto } from '../types/sale'
 
 export async function listSales(
   systemClientId: number,
@@ -27,4 +27,20 @@ export async function getSaleById(
     throw new Error(text || 'Não foi possível carregar a venda.')
   }
   return (await res.json()) as SaleDto
+}
+
+export async function createSales(
+  systemClientId: number,
+  requests: SaleCreateRequest[],
+): Promise<SaleDto[]> {
+  const res = await apiFetch(`/api/sales/${systemClientId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requests),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Não foi possível registrar a venda.')
+  }
+  return (await res.json()) as SaleDto[]
 }

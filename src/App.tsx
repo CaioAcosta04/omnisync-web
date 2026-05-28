@@ -6,6 +6,7 @@ import {
   FiLayers,
   FiList,
   FiSettings,
+  FiShoppingBag,
   FiUsers,
 } from 'react-icons/fi'
 import { AppSidebar } from './components/AppSidebar'
@@ -25,6 +26,7 @@ import {
   DashboardScreen,
   ListingsScreen,
   MarketplacesScreen,
+  OrdersScreen,
   SettingsScreen,
   StockScreen,
   UsersScreen,
@@ -59,6 +61,7 @@ function AppShell() {
     () => [
       { label: 'Dashboard', icon: <FiLayers size={20} />, Screen: DashboardScreen },
       { label: 'Stock', icon: <FiArchive size={20} />, Screen: StockScreen },
+      { label: 'Orders', icon: <FiShoppingBag size={20} />, Screen: OrdersScreen },
       { label: 'Marketplaces', icon: <FiGlobe size={20} />, Screen: MarketplacesScreen },
       { label: 'Activity', icon: <FiActivity size={20} />, Screen: ActivityScreen },
       { label: 'Listings', icon: <FiList size={20} />, Screen: ListingsScreen },

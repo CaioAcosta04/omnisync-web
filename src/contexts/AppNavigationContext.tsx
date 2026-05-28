@@ -3,6 +3,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 export type AppScreenLabel =
   | 'Dashboard'
   | 'Stock'
+  | 'Orders'
   | 'Marketplaces'
   | 'Activity'
   | 'Listings'
