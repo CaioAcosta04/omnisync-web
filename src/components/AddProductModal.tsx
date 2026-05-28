@@ -137,23 +137,6 @@ export function AddProductModal({
     if (open) resetAll()
   }, [open, resetAll])
 
-  if (!open) return null
-
-  const set = <K extends keyof BaseFields>(key: K, value: BaseFields[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
-    if (touched.has(key)) {
-      const updated = { ...form, [key]: value }
-      const newErrors = validateBase(updated)
-      setBaseErrors((prev) => ({ ...prev, [key]: newErrors[key] }))
-    }
-  }
-
-  const markTouched = (key: keyof BaseFields) => {
-    setTouched((prev) => new Set(prev).add(key))
-    const newErrors = validateBase(form)
-    setBaseErrors((prev) => ({ ...prev, [key]: newErrors[key] }))
-  }
-
   const resetCategoryAttributes = useCallback(() => {
     setMlAttributeFields([])
     setMlAttributeValues({})
@@ -203,6 +186,23 @@ export function AddProductModal({
     },
     [systemClientId]
   )
+
+  if (!open) return null
+
+  const set = <K extends keyof BaseFields>(key: K, value: BaseFields[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+    if (touched.has(key)) {
+      const updated = { ...form, [key]: value }
+      const newErrors = validateBase(updated)
+      setBaseErrors((prev) => ({ ...prev, [key]: newErrors[key] }))
+    }
+  }
+
+  const markTouched = (key: keyof BaseFields) => {
+    setTouched((prev) => new Set(prev).add(key))
+    const newErrors = validateBase(form)
+    setBaseErrors((prev) => ({ ...prev, [key]: newErrors[key] }))
+  }
 
   // Category autocomplete
   const handleCategoryQueryChange = (q: string) => {
