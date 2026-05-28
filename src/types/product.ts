@@ -23,7 +23,13 @@ export type MercadoLivreSyncResponse = {
 export type MercadoLivreProductMetadata = {
   category_id: string
   condition: 'new' | 'used'
-  pictures: { source: string }[]
+  pictures: Array<{
+    source?: string
+    base64?: string
+    content_type?: string
+    file_name?: string
+  }>
+  attributes?: Array<{ id: string; value_name?: string; value_id?: string }>
 }
 
 export type ProductCreateRequest = {
@@ -35,5 +41,5 @@ export type ProductCreateRequest = {
   reserved_stock: number
   price: number
   announcement: boolean
-  resource: { mercado_livre?: MercadoLivreProductMetadata } | Record<string, never>
+  resource: Record<string, unknown>
 }
