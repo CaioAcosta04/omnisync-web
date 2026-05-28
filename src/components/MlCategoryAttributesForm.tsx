@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react'
+import {
+  getAttributeUiHint,
+  type MlAttributeFieldState,
+} from '../lib/mlCategoryAttributes'
+import {
+  GTIN_FIELD_HINT,
+  isEmptyGtinReasonAttributeId,
+  isGtinAttributeId,
+  normalizeGtinInput,
+} from '../lib/mlProductIdentifier'
 import type { MlAttributeDefinition, MlAttributeUnitOption, MlAttributeValueOption } from '../types/mercadolivreCatalog'
-import type { MlAttributeFieldState } from '../lib/mlCategoryAttributes'
 
 type MlCategoryAttributesFormProps = {
   fields: MlAttributeDefinition[]
@@ -19,15 +28,63 @@ export function MlCategoryAttributesForm({
 }: MlCategoryAttributesFormProps) {
   if (fields.length === 0) return null
 
+  const gtinField = fields.find((f) => isGtinAttributeId(f.id))
+  const emptyReasonField = fields.find((f) => isEmptyGtinReasonAttributeId(f.id))
+  const otherFields = fields.filter(
+    (f) => !isGtinAttributeId(f.id) && !isEmptyGtinReasonAttributeId(f.id)
+  )
+
+  const noGtinMode = values.__NO_GTIN__ === 'true'
+
   const setField = (key: string, value: string) => {
     onChange({ ...values, [key]: value })
+  }
+
+  const toggleNoGtin = (checked: boolean) => {
+    if (checked) {
+      onChange({
+        ...values,
+        __NO_GTIN__: 'true',
+        ...(gtinField ? { [gtinField.id]: '' } : {}),
+      })
+    } else {
+      onChange({
+        ...values,
+        __NO_GTIN__: '',
+        ...(emptyReasonField ? { [emptyReasonField.id]: '' } : {}),
+      })
+    }
   }
 
   return (
     <div style={styles.wrap}>
       <p style={styles.sectionTitle}>Atributos obrigatórios da categoria</p>
       <div style={styles.fields}>
-        {fields.map((field) => (
+        {gtinField ? (
+          <GtinAttributeField
+            field={gtinField}
+            value={values[gtinField.id] ?? ''}
+            error={errors[gtinField.id]}
+            disabled={noGtinMode}
+            showNoBarcodeOption={emptyReasonField != null}
+            noGtinMode={noGtinMode}
+            onToggleNoGtin={toggleNoGtin}
+            onChange={(v) => setField(gtinField.id, v)}
+            onBlur={() => onFieldBlur?.(gtinField.id)}
+          />
+        ) : null}
+
+        {noGtinMode && emptyReasonField ? (
+          <AttributeField
+            field={emptyReasonField}
+            values={values}
+            error={errors[emptyReasonField.id]}
+            onChange={setField}
+            onBlur={() => onFieldBlur?.(emptyReasonField.id)}
+          />
+        ) : null}
+
+        {otherFields.map((field) => (
           <AttributeField
             key={field.id}
             field={field}
@@ -38,6 +95,69 @@ export function MlCategoryAttributesForm({
           />
         ))}
       </div>
+    </div>
+  )
+}
+
+function GtinAttributeField({
+  field,
+  value,
+  error,
+  disabled,
+  showNoBarcodeOption,
+  noGtinMode,
+  onToggleNoGtin,
+  onChange,
+  onBlur,
+}: {
+  field: MlAttributeDefinition
+  value: string
+  error?: string
+  disabled: boolean
+  showNoBarcodeOption: boolean
+  noGtinMode: boolean
+  onToggleNoGtin: (checked: boolean) => void
+  onChange: (value: string) => void
+  onBlur: () => void
+}) {
+  const label = field.name || 'GTIN'
+  const hint = getAttributeUiHint(field) ?? GTIN_FIELD_HINT
+
+  return (
+    <div style={styles.field}>
+      <label style={styles.label} htmlFor={`ml-attr-${field.id}`}>
+        {label}
+        {!noGtinMode ? <span style={styles.required}> *</span> : null}
+      </label>
+      <span style={styles.hint}>{hint}</span>
+      <input
+        id={`ml-attr-${field.id}`}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="Ex.: 7891234567890"
+        maxLength={14}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(normalizeGtinInput(e.target.value))}
+        onBlur={onBlur}
+        style={{
+          ...styles.input,
+          ...(error ? styles.inputError : {}),
+          ...(disabled ? styles.inputDisabled : {}),
+        }}
+      />
+      {showNoBarcodeOption ? (
+        <label style={styles.checkRow}>
+          <input
+            type="checkbox"
+            checked={noGtinMode}
+            onChange={(e) => onToggleNoGtin(e.target.checked)}
+          />
+          <span>Não possuo código de barras (GTIN)</span>
+        </label>
+      ) : null}
+      {error ? <span style={styles.errorMsg}>{error}</span> : null}
     </div>
   )
 }
@@ -57,10 +177,11 @@ function AttributeField({
 }) {
   const valueType = field.value_type ?? 'string'
   const label = field.name || field.id
+  const hint = getAttributeUiHint(field)
 
   if (valueType === 'list' && field.values && field.values.length > 0) {
     return (
-      <FieldShell label={label} required hint={field.hint} error={error} htmlFor={`ml-attr-${field.id}`}>
+      <FieldShell label={label} required hint={hint} error={error} htmlFor={`ml-attr-${field.id}`}>
         <select
           id={`ml-attr-${field.id}`}
           value={values[field.id] ?? ''}
@@ -81,7 +202,7 @@ function AttributeField({
 
   if (valueType === 'boolean') {
     return (
-      <FieldShell label={label} required hint={field.hint} error={error}>
+      <FieldShell label={label} required hint={hint} error={error}>
         <div style={styles.toggleRow}>
           {[
             { value: 'Sim', label: 'Sim' },
@@ -110,7 +231,7 @@ function AttributeField({
     const numKey = `${field.id}__number`
     const unitKey = `${field.id}__unit`
     return (
-      <FieldShell label={label} required hint={field.hint} error={error}>
+      <FieldShell label={label} required hint={hint} error={error}>
         <div style={styles.numberUnitRow}>
           <input
             id={`ml-attr-${field.id}`}
@@ -143,7 +264,7 @@ function AttributeField({
   const inputType = valueType === 'number' ? 'number' : 'text'
 
   return (
-    <FieldShell label={label} required hint={field.hint} error={error} htmlFor={`ml-attr-${field.id}`}>
+    <FieldShell label={label} required hint={hint} error={error} htmlFor={`ml-attr-${field.id}`}>
       <input
         id={`ml-attr-${field.id}`}
         type={inputType}
@@ -221,6 +342,15 @@ const styles = {
     color: '#9ca3af',
     lineHeight: 1.4,
   },
+  checkRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '12px',
+    color: '#4b5563',
+    marginTop: '4px',
+    cursor: 'pointer',
+  },
   input: {
     width: '100%',
     padding: '10px 12px',
@@ -231,6 +361,10 @@ const styles = {
     color: '#111827',
     backgroundColor: '#ffffff',
     boxSizing: 'border-box' as const,
+  },
+  inputDisabled: {
+    backgroundColor: '#f3f4f6',
+    color: '#9ca3af',
   },
   inputError: {
     borderColor: '#fca5a5',

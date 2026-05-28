@@ -3,6 +3,14 @@ import type {
   MlAttributeFormValue,
   MlCategoryRequirementsResponse,
 } from '../types/mercadolivreCatalog'
+import {
+  EMPTY_GTIN_REASON_HINT,
+  GTIN_FIELD_HINT,
+  isEmptyGtinReasonAttributeId,
+  isGtinAttributeId,
+  normalizeGtinInput,
+  validateGtinValue,
+} from './mlProductIdentifier'
 
 export type { MlAttributeDefinition, MlAttributeFormValue, MlCategoryRequirementsResponse }
 
@@ -68,10 +76,41 @@ export function mergeRequiredAttributes(
   return Array.from(byId.values())
 }
 
+/** Inclui EMPTY_GTIN_REASON quando GTIN está presente (alternativa condicional). */
+export function mergeRequiredAttributesWithGtinReason(
+  response: MlCategoryRequirementsResponse
+): MlAttributeDefinition[] {
+  const fields = mergeRequiredAttributes(response)
+  const byId = new Map(fields.map((f) => [f.id, f]))
+
+  if (byId.has('GTIN')) {
+    const emptyReasonRaw = response.attributes?.find((a) =>
+      isEmptyGtinReasonAttributeId(String(a.id ?? ''))
+    )
+    if (emptyReasonRaw && !byId.has('EMPTY_GTIN_REASON')) {
+      const def = normalizeDefinition(emptyReasonRaw as Partial<MlAttributeDefinition>)
+      if (def) byId.set('EMPTY_GTIN_REASON', def)
+    }
+  }
+
+  return Array.from(byId.values())
+}
+
+export function getAttributeUiHint(field: MlAttributeDefinition): string | undefined {
+  if (field.hint?.trim()) return field.hint.trim()
+  if (isGtinAttributeId(field.id)) return GTIN_FIELD_HINT
+  if (isEmptyGtinReasonAttributeId(field.id)) return EMPTY_GTIN_REASON_HINT
+  return undefined
+}
+
+export function isGtinConditionalRequired(field: MlAttributeDefinition): boolean {
+  return isGtinAttributeId(field.id) && hasTag(field, 'conditional_required')
+}
+
 export type MlAttributeFieldState = Record<string, string>
 
 export function buildInitialFieldState(fields: MlAttributeDefinition[]): MlAttributeFieldState {
-  const state: MlAttributeFieldState = {}
+  const state: MlAttributeFieldState = { __NO_GTIN__: '' }
   for (const field of fields) {
     if (field.value_type === 'boolean') {
       state[field.id] = ''
@@ -91,7 +130,16 @@ export function serializeAttributes(
 ): MlAttributeFormValue[] {
   const result: MlAttributeFormValue[] = []
 
+  const gtinField = fields.find((f) => isGtinAttributeId(f.id))
+  const emptyReasonField = fields.find((f) => isEmptyGtinReasonAttributeId(f.id))
+  const gtinValue = gtinField ? normalizeGtinInput(state[gtinField.id] ?? '') : ''
+  const emptyReasonValue = emptyReasonField ? (state[emptyReasonField.id] ?? '').trim() : ''
+  const noBarcodePath = Boolean(!gtinValue && emptyReasonValue)
+
   for (const field of fields) {
+    if (isGtinAttributeId(field.id) && noBarcodePath) continue
+    if (isEmptyGtinReasonAttributeId(field.id) && gtinValue) continue
+
     const valueType = field.value_type ?? 'string'
 
     if (valueType === 'list') {
@@ -128,6 +176,12 @@ export function serializeAttributes(
 
     const valueName = (state[field.id] ?? '').trim()
     if (!valueName) continue
+
+    if (isGtinAttributeId(field.id)) {
+      result.push({ id: field.id, value_name: normalizeGtinInput(valueName) })
+      continue
+    }
+
     result.push({ id: field.id, value_name: valueName })
   }
 
@@ -142,7 +196,42 @@ export function validateAttributeFields(
 ): MlAttributeValidationErrors {
   const errors: MlAttributeValidationErrors = {}
 
+  const gtinField = fields.find((f) => isGtinAttributeId(f.id))
+  const emptyReasonField = fields.find((f) => isEmptyGtinReasonAttributeId(f.id))
+  const gtinValue = gtinField ? normalizeGtinInput(state[gtinField.id] ?? '') : ''
+  const emptyReasonValue = emptyReasonField ? (state[emptyReasonField.id] ?? '').trim() : ''
+  const noBarcodePath = state.__NO_GTIN__ === 'true' || Boolean(!gtinValue && emptyReasonValue)
+
+  if (gtinField && gtinValue && emptyReasonValue) {
+    const msg = 'Informe o GTIN ou o motivo de ausência, não ambos.'
+    errors[gtinField.id] = msg
+    if (emptyReasonField) errors[emptyReasonField.id] = msg
+  } else if (gtinField) {
+    const label = gtinField.name || 'GTIN'
+    const strictlyRequired =
+      hasTag(gtinField, 'required') || hasTag(gtinField, 'catalog_required')
+    const conditionalRequired = hasTag(gtinField, 'conditional_required')
+
+    if (noBarcodePath) {
+      if (emptyReasonField && !emptyReasonValue) {
+        errors[emptyReasonField.id] = 'Selecione o motivo de ausência do código de barras.'
+      }
+    } else if (gtinValue) {
+      const gtinError = validateGtinValue(gtinValue, label)
+      if (gtinError) errors[gtinField.id] = gtinError
+    } else if (strictlyRequired && !conditionalRequired) {
+      errors[gtinField.id] = `${label} é obrigatório.`
+    } else if (conditionalRequired && emptyReasonField) {
+      errors[gtinField.id] =
+        'Informe o código de barras (GTIN) ou marque que não possui código de barras.'
+    } else if (conditionalRequired) {
+      errors[gtinField.id] = `${label} é obrigatório.`
+    }
+  }
+
   for (const field of fields) {
+    if (isGtinAttributeId(field.id) || isEmptyGtinReasonAttributeId(field.id)) continue
+
     const valueType = field.value_type ?? 'string'
     const label = field.name || field.id
 

@@ -3,7 +3,7 @@ import { FiDollarSign, FiHash, FiImage, FiPackage, FiPlus, FiRefreshCw, FiSearch
 import { MlCategoryAttributesForm } from './MlCategoryAttributesForm'
 import {
   buildInitialFieldState,
-  mergeRequiredAttributes,
+  mergeRequiredAttributesWithGtinReason,
   serializeAttributes,
   validateAttributeFields,
   type MlAttributeFieldState,
@@ -163,7 +163,7 @@ export function AddProductModal({
         const requirements = await fetchCategoryRequirements(systemClientId, categoryId)
         if (requestId !== attributesRequestRef.current) return
 
-        const fields = mergeRequiredAttributes(requirements)
+        const fields = mergeRequiredAttributesWithGtinReason(requirements)
         setMlAttributeFields(fields)
         setMlAttributeValues(buildInitialFieldState(fields))
 
