@@ -12,6 +12,7 @@ import {
   FiTrendingUp,
 } from 'react-icons/fi'
 import { AddProductModal, type NewProductData } from '../components/AddProductModal'
+import { ProductDetailDialog } from '../components/ProductDetailDialog'
 import { ProductImageThumb } from '../components/ProductImageThumb'
 import { StockEmptyState } from '../components/StockEmptyState'
 import { useAuth } from '../contexts/AuthContext'
@@ -86,6 +87,7 @@ export function StockScreen() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -165,6 +167,11 @@ export function StockScreen() {
     const start = (currentPage - 1) * ITEMS_PER_PAGE
     return filteredRows.slice(start, start + ITEMS_PER_PAGE)
   }, [filteredRows, currentPage])
+
+  const selectedProduct = useMemo(
+    () => products.find((p) => p.id === selectedProductId) ?? null,
+    [products, selectedProductId]
+  )
 
   const summaryStats = useMemo(() => {
     const lowStock = rows.filter((r) => r.status === 'low_stock').length
@@ -393,7 +400,19 @@ export function StockScreen() {
                 {paginatedRows.map((row) => {
                   const statusCfg = STATUS_CONFIG[row.status]
                   return (
-                    <tr key={row.id} style={styles.tr}>
+                    <tr
+                      key={row.id}
+                      style={styles.trClickable}
+                      onClick={() => setSelectedProductId(row.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setSelectedProductId(row.id)
+                        }
+                      }}
+                    >
                       <td style={{ ...styles.td, ...styles.tdFirst }}>
                         <div style={styles.productNameCell}>
                           <ProductImageThumb src={row.imageUrl} alt={row.name} size={40} />
@@ -481,6 +500,16 @@ export function StockScreen() {
         submitting={createSubmitting}
         errorMessage={createError}
       />
+
+      {systemClientId != null && selectedProductId != null && (
+        <ProductDetailDialog
+          productId={selectedProductId}
+          systemClientId={systemClientId}
+          initialProduct={selectedProduct}
+          onClose={() => setSelectedProductId(null)}
+          onChanged={() => void fetchProducts()}
+        />
+      )}
     </div>
   )
 }
@@ -768,6 +797,11 @@ const styles = {
   thFirst: { paddingLeft: '24px' },
   thLast: { paddingRight: '24px' },
   tr: { borderBottom: '1px solid #f3f4f6' },
+  trClickable: {
+    borderBottom: '1px solid #f3f4f6',
+    cursor: 'pointer',
+    transition: 'background-color 0.12s',
+  },
   td: {
     padding: '16px 16px',
     fontSize: '14px',

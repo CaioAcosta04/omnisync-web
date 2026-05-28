@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getProductImageUrl } from '../lib/productImage'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
 import { ProductImageThumb } from '../components/ProductImageThumb'
+import { ProductDetailDialog } from '../components/ProductDetailDialog'
 import { formatRelative } from '../lib/relativeTime'
 import { listProducts, syncMercadoLivreProducts } from '../services/productsApi'
 import type { ProductDto } from '../types/product'
@@ -106,6 +107,7 @@ export function ListingsScreen() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
 
   const fetchListings = useCallback(async () => {
     if (systemClientId == null) return
@@ -177,6 +179,11 @@ export function ListingsScreen() {
     const start = (currentPage - 1) * ITEMS_PER_PAGE
     return filteredListings.slice(start, start + ITEMS_PER_PAGE)
   }, [filteredListings, currentPage])
+
+  const selectedProduct = useMemo(
+    () => products.find((p) => p.id === selectedProductId) ?? null,
+    [products, selectedProductId]
+  )
 
   const stats = useMemo(() => {
     const active = allListings.filter((l) => l.status === 'active').length
@@ -452,7 +459,19 @@ export function ListingsScreen() {
                     {paginatedListings.map((listing) => {
                       const statusCfg = STATUS_CONFIG[listing.status]
                       return (
-                        <tr key={listing.productId} style={styles.tr}>
+                        <tr
+                          key={listing.productId}
+                          style={styles.trClickable}
+                          onClick={() => setSelectedProductId(listing.productId)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setSelectedProductId(listing.productId)
+                            }
+                          }}
+                        >
                           <td style={{ ...styles.td, ...styles.tdFirst }}>
                             <div style={styles.titleCell}>
                               <ProductImageThumb src={listing.imageUrl} alt={listing.title} size={40} />
@@ -469,6 +488,7 @@ export function ListingsScreen() {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={styles.itemIdLink}
+                                onClick={(e) => e.stopPropagation()}
                               >
                                 {listing.itemId}
                                 <FiExternalLink size={12} />
@@ -570,6 +590,16 @@ export function ListingsScreen() {
             </div>
           )}
         </>
+      )}
+
+      {systemClientId != null && selectedProductId != null && (
+        <ProductDetailDialog
+          productId={selectedProductId}
+          systemClientId={systemClientId}
+          initialProduct={selectedProduct}
+          onClose={() => setSelectedProductId(null)}
+          onChanged={() => void fetchListings()}
+        />
       )}
     </div>
   )
@@ -887,6 +917,11 @@ const styles = {
   thFirst: { paddingLeft: '24px' },
   thLast: { paddingRight: '24px' },
   tr: { borderBottom: '1px solid #f3f4f6' },
+  trClickable: {
+    borderBottom: '1px solid #f3f4f6',
+    cursor: 'pointer',
+    transition: 'background-color 0.12s',
+  },
   td: {
     padding: '16px',
     fontSize: '14px',

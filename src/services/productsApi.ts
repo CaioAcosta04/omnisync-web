@@ -46,6 +46,35 @@ export async function createProduct(
   return (await res.json()) as ProductDto
 }
 
+export async function getProduct(
+  systemClientId: number,
+  id: number
+): Promise<ProductDto> {
+  const res = await apiFetch(`/api/products/${systemClientId}/${id}`)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Não foi possível carregar o produto.')
+  }
+  return (await res.json()) as ProductDto
+}
+
+export async function updateProduct(
+  systemClientId: number,
+  id: number,
+  data: ProductDto
+): Promise<ProductDto> {
+  const res = await apiFetch(`/api/products/${systemClientId}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Não foi possível atualizar o produto.')
+  }
+  return (await res.json()) as ProductDto
+}
+
 export async function deleteProduct(
   systemClientId: number,
   id: number
