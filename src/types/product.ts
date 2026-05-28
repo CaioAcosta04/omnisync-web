@@ -24,6 +24,7 @@ export type MercadoLivreProductMetadata = {
   category_id: string
   condition: 'new' | 'used'
   pictures: { source: string }[]
+  attributes?: Array<{ id: string; value_name?: string; value_id?: string }>
 }
 
 export type ProductCreateRequest = {
