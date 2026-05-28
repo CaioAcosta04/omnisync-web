@@ -3,6 +3,13 @@ const MAX_PICTURES = 10
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
+/** Requisito do Mercado Livre: mínimo 500 px em um dos lados (após processamento). */
+export const ML_MIN_IMAGE_SIDE_PX = 500
+export const ML_RECOMMENDED_IMAGE_PX = 1200
+
+export const ML_IMAGE_HINT =
+  `Mínimo ${ML_MIN_IMAGE_SIDE_PX} px no maior lado (recomendado ${ML_RECOMMENDED_IMAGE_PX}×${ML_RECOMMENDED_IMAGE_PX}). Evite bordas brancas grandes — o ML recorta até ~10%.`
+
 export type ProductPictureEntry = {
   id: string
   previewUrl: string
@@ -35,6 +42,35 @@ export function pictureFromUrl(url: string): ProductPictureEntry | null {
   }
 }
 
+function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    }
+    img.onerror = () => {
+      reject(new Error('Não foi possível carregar a imagem para verificar o tamanho.'))
+    }
+    img.src = src
+  })
+}
+
+export function validateImageDimensions(width: number, height: number): string | null {
+  const longest = Math.max(width, height)
+  if (longest < ML_MIN_IMAGE_SIDE_PX) {
+    return `A imagem precisa ter pelo menos ${ML_MIN_IMAGE_SIDE_PX} px em um dos lados (enviada: ${width}×${height} px). Recomendado: ${ML_RECOMMENDED_IMAGE_PX}×${ML_RECOMMENDED_IMAGE_PX} px para o Mercado Livre.`
+  }
+  return null
+}
+
+async function assertImageMeetsMlRequirements(src: string, label: string): Promise<void> {
+  const { width, height } = await loadImageDimensions(src)
+  const error = validateImageDimensions(width, height)
+  if (error) {
+    throw new Error(`${label}: ${error}`)
+  }
+}
+
 export async function pictureFromFile(file: File): Promise<ProductPictureEntry> {
   if (!ACCEPTED_TYPES.has(file.type)) {
     throw new Error('Formato não suportado. Use JPEG, PNG, WebP ou GIF.')
@@ -44,12 +80,24 @@ export async function pictureFromFile(file: File): Promise<ProductPictureEntry> 
   }
 
   const dataUri = await readFileAsDataUrl(file)
+  await assertImageMeetsMlRequirements(dataUri, file.name)
+
   return {
     id: crypto.randomUUID(),
     previewUrl: dataUri,
     base64: dataUri,
     contentType: file.type,
     fileName: file.name,
+  }
+}
+
+/** Valida dimensões de URL remota (pode falhar por CORS — retorna aviso, não erro fatal). */
+export async function validatePictureUrlDimensions(url: string): Promise<string | null> {
+  try {
+    const { width, height } = await loadImageDimensions(url)
+    return validateImageDimensions(width, height)
+  } catch {
+    return null
   }
 }
 

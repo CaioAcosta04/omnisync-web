@@ -3,9 +3,11 @@ import { FiImage, FiPlus, FiTrash2, FiUpload } from 'react-icons/fi'
 import {
   createEmptyPicture,
   isPictureComplete,
+  ML_IMAGE_HINT,
   PICTURE_ACCEPT,
   pictureFromFile,
   pictureFromUrl,
+  validatePictureUrlDimensions,
   type ProductPictureEntry,
 } from '../lib/productPictures'
 
@@ -56,7 +58,7 @@ export function ProductPicturesEditor({
     }
   }
 
-  const handleUrlBlur = (entry: ProductPictureEntry, rawUrl: string) => {
+  const handleUrlBlur = async (entry: ProductPictureEntry, rawUrl: string) => {
     const trimmed = rawUrl.trim()
     if (!trimmed) {
       updateEntry(entry.id, {
@@ -70,6 +72,12 @@ export function ProductPicturesEditor({
     }
     const parsed = pictureFromUrl(trimmed)
     if (parsed) {
+      const dimError = await validatePictureUrlDimensions(parsed.previewUrl)
+      if (dimError) {
+        setUploadError(dimError)
+        return
+      }
+      setUploadError(null)
       updateEntry(entry.id, {
         previewUrl: parsed.previewUrl,
         sourceUrl: parsed.sourceUrl,
@@ -108,7 +116,7 @@ export function ProductPicturesEditor({
       </div>
 
       <p style={styles.hint}>
-        JPEG, PNG, WebP ou GIF — até 5 MB. O backend envia para o Mercado Livre automaticamente.
+        {ML_IMAGE_HINT} Formatos: JPEG, PNG, WebP ou GIF — até 5 MB.
       </p>
 
       {uploadError ? (
@@ -133,7 +141,7 @@ export function ProductPicturesEditor({
                 placeholder="https://... (opcional se fez upload)"
                 value={entry.sourceUrl ?? (entry.base64 ? '' : entry.previewUrl)}
                 onChange={(e) => updateEntry(entry.id, { previewUrl: e.target.value, sourceUrl: e.target.value })}
-                onBlur={(e) => handleUrlBlur(entry, e.target.value)}
+                          onBlur={(e) => void handleUrlBlur(entry, e.target.value)}
                 style={styles.input}
               />
               {entry.fileName ? (
