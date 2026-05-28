@@ -22,10 +22,10 @@ type CreateUserModalProps = {
 type FieldError = Partial<Record<'name' | 'email' | 'password', string>>
 
 const ROLES: { id: UserRole; label: string; description: string }[] = [
-  { id: 'admin', label: 'Admin', description: 'Full platform access including billing and user management' },
-  { id: 'manager', label: 'Manager', description: 'Manage stock, listings, orders, and marketplaces' },
-  { id: 'editor', label: 'Editor', description: 'Create and edit listings and stock entries' },
-  { id: 'viewer', label: 'Viewer', description: 'View-only access to all platform data' },
+  { id: 'admin', label: 'Administrador', description: 'Acesso total à plataforma, incluindo faturamento e usuários' },
+  { id: 'manager', label: 'Gerente', description: 'Gerencia estoque, anúncios, vendas e marketplaces' },
+  { id: 'editor', label: 'Editor', description: 'Cria e edita anúncios e entradas de estoque' },
+  { id: 'viewer', label: 'Visualizador', description: 'Acesso somente leitura a todos os dados' },
 ]
 
 const ROLE_COLORS: Record<UserRole, { bg: string; color: string; border: string }> = {
@@ -36,15 +36,15 @@ const ROLE_COLORS: Record<UserRole, { bg: string; color: string; border: string 
 }
 
 const ALL_PERMISSIONS = [
-  'Full Access',
-  'User Management',
-  'Billing',
-  'Stock Management',
-  'Listings',
-  'Orders',
+  'Acesso total',
+  'Gestão de usuários',
+  'Faturamento',
+  'Gestão de estoque',
+  'Anúncios',
+  'Vendas',
   'Marketplaces',
-  'Activity',
-  'View Only',
+  'Atividade',
+  'Somente leitura',
 ]
 
 const INITIAL_FORM: NewUserData = {
@@ -52,17 +52,17 @@ const INITIAL_FORM: NewUserData = {
   email: '',
   password: '',
   role: 'viewer',
-  permissions: ['View Only'],
+  permissions: ['Somente leitura'],
 }
 
 function validate(form: NewUserData): FieldError {
   const errors: FieldError = {}
-  if (!form.name.trim()) errors.name = 'Name is required.'
-  if (!form.email.trim()) errors.email = 'Email is required.'
+  if (!form.name.trim()) errors.name = 'Nome é obrigatório.'
+  if (!form.email.trim()) errors.email = 'E-mail é obrigatório.'
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-    errors.email = 'Enter a valid email address.'
-  if (!form.password) errors.password = 'Password is required.'
-  else if (form.password.length < 6) errors.password = 'Password must be at least 6 characters.'
+    errors.email = 'Informe um e-mail válido.'
+  if (!form.password) errors.password = 'Senha é obrigatória.'
+  else if (form.password.length < 6) errors.password = 'Senha deve ter pelo menos 6 caracteres.'
   return errors
 }
 
@@ -126,10 +126,10 @@ export function CreateUserModal({
         {/* Header */}
         <div style={styles.header}>
           <div>
-            <h2 style={styles.title}>Create New User</h2>
-            <p style={styles.subtitle}>Add a new team member to the platform</p>
+            <h2 style={styles.title}>Criar usuário</h2>
+            <p style={styles.subtitle}>Adicione um novo membro à equipe</p>
           </div>
-          <button type="button" style={styles.closeBtn} onClick={handleClose} aria-label="Close">
+          <button type="button" style={styles.closeBtn} onClick={handleClose} aria-label="Fechar">
             <FiX size={20} />
           </button>
         </div>
@@ -138,7 +138,7 @@ export function CreateUserModal({
           {/* Name */}
           <div style={styles.field}>
             <label style={styles.label} htmlFor="new-user-name">
-              Full Name <span style={styles.required}>*</span>
+              Nome completo <span style={styles.required}>*</span>
             </label>
             <div style={{ ...styles.inputWrap, ...(errors.name ? styles.inputWrapError : {}) }}>
               <FiUser size={16} color="#9ca3af" />
@@ -158,7 +158,7 @@ export function CreateUserModal({
           {/* Email */}
           <div style={styles.field}>
             <label style={styles.label} htmlFor="new-user-email">
-              Email <span style={styles.required}>*</span>
+              E-mail <span style={styles.required}>*</span>
             </label>
             <div style={{ ...styles.inputWrap, ...(errors.email ? styles.inputWrapError : {}) }}>
               <FiMail size={16} color="#9ca3af" />
@@ -178,14 +178,14 @@ export function CreateUserModal({
           {/* Password */}
           <div style={styles.field}>
             <label style={styles.label} htmlFor="new-user-password">
-              Password <span style={styles.required}>*</span>
+              Senha <span style={styles.required}>*</span>
             </label>
             <div style={{ ...styles.inputWrap, ...(errors.password ? styles.inputWrapError : {}) }}>
               <FiLock size={16} color="#9ca3af" />
               <input
                 id="new-user-password"
                 type="password"
-                placeholder="Min. 6 characters"
+                placeholder="Mín. 6 caracteres"
                 value={form.password}
                 onChange={(e) => set('password', e.target.value)}
                 onBlur={() => markTouched('password')}
@@ -199,7 +199,7 @@ export function CreateUserModal({
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <FiShield size={16} color="#6b7280" />
-              <span style={styles.sectionTitle}>Role</span>
+              <span style={styles.sectionTitle}>Função</span>
             </div>
             <div style={styles.rolesGrid}>
               {ROLES.map((r) => {
@@ -243,7 +243,7 @@ export function CreateUserModal({
           <div style={styles.section}>
             <div style={styles.sectionHeader}>
               <FiShield size={16} color="#6b7280" />
-              <span style={styles.sectionTitle}>Permissions</span>
+              <span style={styles.sectionTitle}>Permissões</span>
             </div>
             <div style={styles.permGrid}>
               {ALL_PERMISSIONS.map((perm) => {
@@ -275,14 +275,14 @@ export function CreateUserModal({
           {/* Actions */}
           <div style={styles.actions}>
             <button type="button" style={styles.cancelBtn} onClick={handleClose} disabled={submitting}>
-              Cancel
+              Cancelar
             </button>
             <button
               type="submit"
               style={{ ...styles.submitBtn, ...(submitting ? styles.submitBtnDisabled : {}) }}
               disabled={submitting}
             >
-              {submitting ? 'Creating…' : 'Create User'}
+              {submitting ? 'Criando…' : 'Criar usuário'}
             </button>
           </div>
         </form>

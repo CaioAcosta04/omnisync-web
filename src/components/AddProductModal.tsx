@@ -53,15 +53,15 @@ type MlErrors = {
 
 function validateBase(form: BaseFields): BaseErrors {
   const errors: BaseErrors = {}
-  if (!form.name.trim()) errors.name = 'Product name is required.'
-  if (!form.sku.trim()) errors.sku = 'SKU is required.'
-  else if (form.sku.trim().length > 100) errors.sku = 'SKU must be at most 100 characters.'
-  if (!form.description.trim()) errors.description = 'Description is required.'
-  if (form.price < 0) errors.price = 'Price cannot be negative.'
-  if (form.stock < 0) errors.stock = 'Stock cannot be negative.'
-  if (form.reservedStock < 0) errors.reservedStock = 'Reserved stock cannot be negative.'
+  if (!form.name.trim()) errors.name = 'Nome do produto é obrigatório.'
+  if (!form.sku.trim()) errors.sku = 'SKU é obrigatório.'
+  else if (form.sku.trim().length > 100) errors.sku = 'SKU deve ter no máximo 100 caracteres.'
+  if (!form.description.trim()) errors.description = 'Descrição é obrigatória.'
+  if (form.price < 0) errors.price = 'Preço não pode ser negativo.'
+  if (form.stock < 0) errors.stock = 'Estoque não pode ser negativo.'
+  if (form.reservedStock < 0) errors.reservedStock = 'Estoque reservado não pode ser negativo.'
   else if (form.reservedStock > form.stock)
-    errors.reservedStock = 'Reserved stock cannot exceed total stock.'
+    errors.reservedStock = 'Estoque reservado não pode ser maior que o total.'
   return errors
 }
 
@@ -311,15 +311,15 @@ export function AddProductModal({
         {/* Header */}
         <div style={styles.header}>
           <div>
-            <h2 style={styles.title}>Add New Product</h2>
-            <p style={styles.subtitle}>Fill in the product details below</p>
+            <h2 style={styles.title}>Adicionar produto</h2>
+            <p style={styles.subtitle}>Preencha os dados do produto abaixo</p>
           </div>
           <button
             type="button"
             style={styles.closeBtn}
             onClick={handleClose}
             disabled={submitting}
-            aria-label="Close"
+            aria-label="Fechar"
           >
             <FiX size={20} />
           </button>
@@ -329,14 +329,14 @@ export function AddProductModal({
           {/* Name */}
           <div style={styles.field}>
             <label style={styles.label} htmlFor="product-name">
-              Product Name <span style={styles.required}>*</span>
+              Nome do produto <span style={styles.required}>*</span>
             </label>
             <div style={{ ...styles.inputWrap, ...(baseErrors.name ? styles.inputWrapError : {}) }}>
               <FiPackage size={16} color="#9ca3af" />
               <input
                 id="product-name"
                 type="text"
-                placeholder="e.g. Premium Wireless Headphones"
+                placeholder="Ex.: Fone Bluetooth Premium"
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
                 onBlur={() => markTouched('name')}
@@ -356,7 +356,7 @@ export function AddProductModal({
               <input
                 id="product-sku"
                 type="text"
-                placeholder="e.g. WH-1000XM5-B"
+                placeholder="Ex.: WH-1000XM5-B"
                 value={form.sku}
                 onChange={(e) => set('sku', e.target.value)}
                 onBlur={() => markTouched('sku')}
@@ -370,12 +370,12 @@ export function AddProductModal({
           {/* Description */}
           <div style={styles.field}>
             <label style={styles.label} htmlFor="product-description">
-              Description <span style={styles.required}>*</span>
+              Descrição <span style={styles.required}>*</span>
             </label>
             <div style={{ ...styles.textareaWrap, ...(baseErrors.description ? styles.inputWrapError : {}) }}>
               <textarea
                 id="product-description"
-                placeholder="Brief product description..."
+                placeholder="Breve descrição do produto..."
                 value={form.description}
                 onChange={(e) => set('description', e.target.value)}
                 onBlur={() => markTouched('description')}
@@ -390,7 +390,7 @@ export function AddProductModal({
           <div style={styles.row}>
             <div style={{ ...styles.field, flex: 1 }}>
               <label style={styles.label} htmlFor="product-price">
-                Price (R$) <span style={styles.required}>*</span>
+                Preço (R$) <span style={styles.required}>*</span>
               </label>
               <div style={{ ...styles.inputWrap, ...(baseErrors.price ? styles.inputWrapError : {}) }}>
                 <FiDollarSign size={16} color="#9ca3af" />
@@ -414,7 +414,7 @@ export function AddProductModal({
           <div style={styles.row}>
             <div style={{ ...styles.field, flex: 1 }}>
               <label style={styles.label} htmlFor="product-stock">
-                Stock <span style={styles.required}>*</span>
+                Estoque <span style={styles.required}>*</span>
               </label>
               <div style={{ ...styles.inputWrap, ...(baseErrors.stock ? styles.inputWrapError : {}) }}>
                 <input
@@ -432,7 +432,7 @@ export function AddProductModal({
             </div>
             <div style={{ ...styles.field, flex: 1 }}>
               <label style={styles.label} htmlFor="product-reserved">
-                Reserved Stock
+                Estoque reservado
               </label>
               <div style={{ ...styles.inputWrap, ...(baseErrors.reservedStock ? styles.inputWrapError : {}) }}>
                 <input
@@ -639,10 +639,10 @@ export function AddProductModal({
               onClick={handleClose}
               disabled={submitting}
             >
-              Cancel
+              Cancelar
             </button>
             <button type="submit" style={styles.submitBtn} disabled={submitting}>
-              {submitting ? 'Criando…' : 'Create Product'}
+              {submitting ? 'Criando…' : 'Criar produto'}
             </button>
           </div>
         </form>

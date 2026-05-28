@@ -18,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatRelative } from '../lib/relativeTime'
 import {
   buildUserResource,
+  formatPermissionLabel,
   initialsFromName,
   parseUserPermissions,
   parseUserRole,
@@ -46,15 +47,15 @@ type PlatformUser = {
 }
 
 const ROLE_CONFIG: Record<UserRole, { label: string; bg: string; color: string }> = {
-  admin: { label: 'Admin', bg: '#ede9fe', color: '#6d28d9' },
-  manager: { label: 'Manager', bg: '#dbeafe', color: '#2563eb' },
+  admin: { label: 'Administrador', bg: '#ede9fe', color: '#6d28d9' },
+  manager: { label: 'Gerente', bg: '#dbeafe', color: '#2563eb' },
   editor: { label: 'Editor', bg: '#fef3c7', color: '#92400e' },
-  viewer: { label: 'Viewer', bg: '#f3f4f6', color: '#374151' },
+  viewer: { label: 'Visualizador', bg: '#f3f4f6', color: '#374151' },
 }
 
 const STATUS_CONFIG: Record<UserStatus, { label: string; color: string }> = {
-  active: { label: 'Active', color: '#22c55e' },
-  inactive: { label: 'Inactive', color: '#9ca3af' },
+  active: { label: 'Ativo', color: '#22c55e' },
+  inactive: { label: 'Inativo', color: '#9ca3af' },
 }
 
 const AVATAR_COLORS = ['#6d28d9', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#4f46e5']
@@ -232,7 +233,7 @@ export function UsersScreen() {
         style={{ ...styles.pageBtn, ...(currentPage === 1 ? styles.pageBtnDisabled : {}) }}
         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
         disabled={currentPage === 1}
-        aria-label="Previous page"
+        aria-label="Página anterior"
       >
         <FiChevronLeft size={16} />
       </button>
@@ -258,7 +259,7 @@ export function UsersScreen() {
         style={{ ...styles.pageBtn, ...(currentPage === totalPages ? styles.pageBtnDisabled : {}) }}
         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
         disabled={currentPage === totalPages}
-        aria-label="Next page"
+        aria-label="Próxima página"
       >
         <FiChevronRight size={16} />
       </button>
@@ -275,19 +276,19 @@ export function UsersScreen() {
           <FiSearch size={18} color="#9ca3af" style={{ flexShrink: 0 }} />
           <input
             type="text"
-            placeholder="Search by name, email, or role..."
+            placeholder="Buscar por nome, e-mail ou função..."
             value={searchQuery}
             onChange={handleSearch}
             style={styles.searchInput}
           />
         </div>
         <div style={styles.topBarRight}>
-          <button type="button" style={styles.bellBtn} aria-label="Notifications">
+          <button type="button" style={styles.bellBtn} aria-label="Notificações">
             <FiBell size={20} color="#6b7280" />
           </button>
           <button type="button" style={styles.createUserBtn} onClick={() => setShowCreateModal(true)}>
             <FiUserPlus size={16} />
-            Create User
+            Criar usuário
           </button>
         </div>
       </div>
@@ -295,9 +296,9 @@ export function UsersScreen() {
       {/* Header */}
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>User Management</h1>
+          <h1 style={styles.title}>Gestão de usuários</h1>
           <p style={styles.subtitle}>
-            Manage team members, roles, and access permissions for your platform.
+            Gerencie membros da equipe, funções e permissões de acesso.
           </p>
         </div>
       </div>
@@ -318,7 +319,7 @@ export function UsersScreen() {
             <FiUsers size={20} />
           </div>
           <div>
-            <span style={styles.summaryLabel}>Total Users</span>
+            <span style={styles.summaryLabel}>Total de usuários</span>
             <span style={styles.summaryValue}>{loading ? '…' : stats.total}</span>
           </div>
         </div>
@@ -327,7 +328,7 @@ export function UsersScreen() {
             <FiUser size={20} />
           </div>
           <div>
-            <span style={styles.summaryLabel}>Active Now</span>
+            <span style={styles.summaryLabel}>Ativos agora</span>
             <span style={styles.summaryValue}>{loading ? '…' : stats.active}</span>
           </div>
         </div>
@@ -336,7 +337,7 @@ export function UsersScreen() {
             <FiShield size={20} />
           </div>
           <div>
-            <span style={styles.summaryLabel}>Admins</span>
+            <span style={styles.summaryLabel}>Administradores</span>
             <span style={styles.summaryValue}>{loading ? '…' : stats.admins}</span>
           </div>
         </div>
@@ -345,7 +346,7 @@ export function UsersScreen() {
             <FiUser size={20} />
           </div>
           <div>
-            <span style={styles.summaryLabel}>Inactive</span>
+            <span style={styles.summaryLabel}>Inativos</span>
             <span style={styles.summaryValue}>{loading ? '…' : stats.inactive}</span>
           </div>
         </div>
@@ -363,7 +364,7 @@ export function UsersScreen() {
             }}
             onClick={() => handleRoleFilter(role)}
           >
-            {role === 'all' ? 'All Roles' : ROLE_CONFIG[role].label}
+            {role === 'all' ? 'Todas as funções' : ROLE_CONFIG[role].label}
           </button>
         ))}
       </div>
@@ -373,12 +374,12 @@ export function UsersScreen() {
         <table style={styles.table}>
           <thead>
             <tr>
-              <th style={{ ...styles.th, ...styles.thFirst }}>USER</th>
-              <th style={styles.th}>ROLE</th>
-              <th style={styles.th}>PERMISSIONS</th>
+              <th style={{ ...styles.th, ...styles.thFirst }}>USUÁRIO</th>
+              <th style={styles.th}>FUNÇÃO</th>
+              <th style={styles.th}>PERMISSÕES</th>
               <th style={styles.th}>STATUS</th>
-              <th style={styles.th}>LAST ACTIVE</th>
-              <th style={{ ...styles.th, ...styles.thLast }}>ACTIONS</th>
+              <th style={styles.th}>ÚLTIMO ACESSO</th>
+              <th style={{ ...styles.th, ...styles.thLast }}>AÇÕES</th>
             </tr>
           </thead>
           <tbody>
@@ -430,7 +431,7 @@ export function UsersScreen() {
                     <div style={styles.permissionsWrap}>
                       {user.permissions.map((p) => (
                         <span key={p} style={styles.permissionTag}>
-                          {p}
+                          {formatPermissionLabel(p)}
                         </span>
                       ))}
                     </div>
@@ -452,13 +453,13 @@ export function UsersScreen() {
                         onClick={() => setManagingUser(user)}
                       >
                         <FiEdit2 size={14} />
-                        Manage
+                        Gerenciar
                       </button>
                       <div style={{ position: 'relative' }}>
                         <button
                           type="button"
                           style={styles.moreBtn}
-                          aria-label="More actions"
+                          aria-label="Mais ações"
                           onClick={(e) => {
                             e.stopPropagation()
                             setOpenMenuId(openMenuId === user.id ? null : user.id)
@@ -477,7 +478,7 @@ export function UsersScreen() {
                               }}
                             >
                               <FiShield size={14} />
-                              Change Role
+                              Alterar função
                             </button>
                             <button
                               type="button"
@@ -486,7 +487,7 @@ export function UsersScreen() {
                               onClick={() => void handleDeactivateUser(user.id)}
                             >
                               <FiTrash2 size={14} />
-                              Deactivate User
+                              Desativar usuário
                             </button>
                           </div>
                         )}
@@ -503,9 +504,9 @@ export function UsersScreen() {
       {/* Pagination */}
       <div style={styles.pagination}>
         <span style={styles.paginationInfo}>
-          Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
-          {Math.min(currentPage * ITEMS_PER_PAGE, filteredUsers.length)} of{' '}
-          {filteredUsers.length} users
+          Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1} a{' '}
+          {Math.min(currentPage * ITEMS_PER_PAGE, filteredUsers.length)} de{' '}
+          {filteredUsers.length} usuários
         </span>
         <div style={styles.paginationBtns}>{renderPagination()}</div>
       </div>

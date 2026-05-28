@@ -45,9 +45,9 @@ const ML_BADGE: MarketplaceBadge = { letter: 'M', color: '#22c55e' }
 const ITEMS_PER_PAGE = 5
 
 const STATUS_CONFIG: Record<ProductStatus, { label: string; bg: string; color: string }> = {
-  healthy: { label: 'Healthy', bg: '#dcfce7', color: '#166534' },
-  low_stock: { label: 'Low Stock', bg: '#fef3c7', color: '#92400e' },
-  out_of_stock: { label: 'Out of Stock', bg: '#fee2e2', color: '#991b1b' },
+  healthy: { label: 'Normal', bg: '#dcfce7', color: '#166534' },
+  low_stock: { label: 'Estoque baixo', bg: '#fef3c7', color: '#92400e' },
+  out_of_stock: { label: 'Sem estoque', bg: '#fee2e2', color: '#991b1b' },
 }
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -195,7 +195,7 @@ export function StockScreen() {
         style={{ ...styles.pageBtn, ...(currentPage === 1 ? styles.pageBtnDisabled : {}) }}
         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
         disabled={currentPage === 1}
-        aria-label="Previous page"
+        aria-label="Página anterior"
       >
         <FiChevronLeft size={16} />
       </button>
@@ -237,7 +237,7 @@ export function StockScreen() {
         }}
         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
         disabled={currentPage === totalPages || totalPages === 0}
-        aria-label="Next page"
+        aria-label="Próxima página"
       >
         <FiChevronRight size={16} />
       </button>
@@ -254,14 +254,14 @@ export function StockScreen() {
           <FiSearch size={18} color="#9ca3af" style={{ flexShrink: 0 }} />
           <input
             type="text"
-            placeholder="Search by product name or SKU..."
+            placeholder="Buscar por nome ou SKU..."
             value={searchQuery}
             onChange={handleSearch}
             style={styles.searchInput}
           />
         </div>
         <div style={styles.topBarRight}>
-          <button type="button" style={styles.bellBtn} aria-label="Notifications">
+          <button type="button" style={styles.bellBtn} aria-label="Notificações">
             <FiBell size={20} color="#6b7280" />
           </button>
           <div style={styles.userInfo}>
@@ -293,7 +293,7 @@ export function StockScreen() {
       {/* Summary cards */}
       <div style={styles.summaryRow}>
         <div style={styles.summaryCard}>
-          <span style={styles.summaryLabel}>TOTAL SKUS</span>
+          <span style={styles.summaryLabel}>TOTAL DE SKUS</span>
           <div style={styles.summaryBottom}>
             <span style={styles.summaryValue}>
               {loading ? '…' : summaryStats.totalSkus.toLocaleString('pt-BR')}
@@ -302,7 +302,7 @@ export function StockScreen() {
           </div>
         </div>
         <div style={styles.summaryCard}>
-          <span style={styles.summaryLabel}>LOW STOCK ALERTS</span>
+          <span style={styles.summaryLabel}>ALERTAS DE ESTOQUE</span>
           <div style={styles.summaryBottom}>
             <span style={styles.summaryValue}>
               {loading ? '…' : summaryStats.lowStock}
@@ -321,7 +321,7 @@ export function StockScreen() {
           </div>
         </div>
         <div style={styles.summaryCard}>
-          <span style={styles.summaryLabel}>OUT OF STOCK</span>
+          <span style={styles.summaryLabel}>SEM ESTOQUE</span>
           <div style={styles.summaryBottom}>
             <span style={styles.summaryValue}>
               {loading ? '…' : summaryStats.outOfStock}
@@ -345,21 +345,21 @@ export function StockScreen() {
       {/* Inventory overview header */}
       <div style={styles.sectionHeader}>
         <div>
-          <h2 style={styles.sectionTitle}>Inventory Overview</h2>
+          <h2 style={styles.sectionTitle}>Visão do estoque</h2>
           <p style={styles.sectionSubtitle}>Gerencie seus produtos cadastrados</p>
         </div>
         <div style={styles.sectionActions}>
           <button type="button" style={styles.filterBtn}>
             <FiSliders size={16} />
-            Filters
+            Filtros
           </button>
           <button type="button" style={styles.exportBtn}>
             <FiDownload size={16} />
-            Export CSV
+            Exportar CSV
           </button>
           <button type="button" style={styles.addProductBtn} onClick={() => setShowAddModal(true)}>
             <FiPlus size={18} />
-            Add Product
+            Adicionar produto
           </button>
         </div>
       </div>
@@ -388,7 +388,7 @@ export function StockScreen() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  <th style={{ ...styles.th, ...styles.thFirst }}>PRODUCT NAME</th>
+                  <th style={{ ...styles.th, ...styles.thFirst }}>PRODUTO</th>
                   <th style={styles.th}>SKU</th>
                   <th style={styles.th}>QTD DISPONÍVEL</th>
                   <th style={styles.th}>MARKETPLACES</th>
@@ -434,7 +434,7 @@ export function StockScreen() {
                                   : '#111827',
                           }}
                         >
-                          {row.availableQty} units
+                          {row.availableQty} un.
                         </span>
                       </td>
                       <td style={styles.td}>
@@ -477,9 +477,9 @@ export function StockScreen() {
           {/* Pagination */}
           <div style={styles.pagination}>
             <span style={styles.paginationInfo}>
-              Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
-              {Math.min(currentPage * ITEMS_PER_PAGE, filteredRows.length)} of{' '}
-              {filteredRows.length} results
+              Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1} a{' '}
+              {Math.min(currentPage * ITEMS_PER_PAGE, filteredRows.length)} de{' '}
+              {filteredRows.length} resultados
             </span>
             <div style={styles.paginationBtns}>{renderPaginationButtons()}</div>
           </div>

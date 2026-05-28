@@ -1,14 +1,14 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 
 export type AppScreenLabel =
-  | 'Dashboard'
-  | 'Stock'
-  | 'Orders'
+  | 'Painel'
+  | 'Estoque'
+  | 'Vendas'
   | 'Marketplaces'
-  | 'Activity'
-  | 'Listings'
-  | 'Users'
-  | 'Settings'
+  | 'Atividade'
+  | 'Anúncios'
+  | 'Usuários'
+  | 'Configurações'
 
 export type AppNav = {
   navigateTo: (label: AppScreenLabel) => void

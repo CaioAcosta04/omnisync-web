@@ -59,18 +59,18 @@ function AppShell() {
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
   const sidebarItems = useMemo(
     () => [
-      { label: 'Dashboard', icon: <FiLayers size={20} />, Screen: DashboardScreen },
-      { label: 'Stock', icon: <FiArchive size={20} />, Screen: StockScreen },
-      { label: 'Orders', icon: <FiShoppingBag size={20} />, Screen: OrdersScreen },
+      { label: 'Painel', icon: <FiLayers size={20} />, Screen: DashboardScreen },
+      { label: 'Estoque', icon: <FiArchive size={20} />, Screen: StockScreen },
+      { label: 'Vendas', icon: <FiShoppingBag size={20} />, Screen: OrdersScreen },
       { label: 'Marketplaces', icon: <FiGlobe size={20} />, Screen: MarketplacesScreen },
-      { label: 'Activity', icon: <FiActivity size={20} />, Screen: ActivityScreen },
-      { label: 'Listings', icon: <FiList size={20} />, Screen: ListingsScreen },
-      { label: 'Users', icon: <FiUsers size={20} />, Screen: UsersScreen },
-      { label: 'Settings', icon: <FiSettings size={20} />, Screen: SettingsScreen },
+      { label: 'Atividade', icon: <FiActivity size={20} />, Screen: ActivityScreen },
+      { label: 'Anúncios', icon: <FiList size={20} />, Screen: ListingsScreen },
+      { label: 'Usuários', icon: <FiUsers size={20} />, Screen: UsersScreen },
+      { label: 'Configurações', icon: <FiSettings size={20} />, Screen: SettingsScreen },
     ],
     []
   )
-  const [activeLabel, setActiveLabel] = useState(sidebarItems[0]?.label ?? 'Dashboard')
+  const [activeLabel, setActiveLabel] = useState(sidebarItems[0]?.label ?? 'Painel')
   const activeItem =
     sidebarItems.find((item) => item.label === activeLabel) ?? sidebarItems[0]
 

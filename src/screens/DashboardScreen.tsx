@@ -39,78 +39,78 @@ type RecentEvent = {
 const KPI_CARDS: KpiCard[] = [
   {
     id: 'products',
-    label: 'Total Products',
-    value: '12,480',
-    change: '+2.4%',
+    label: 'Total de produtos',
+    value: '12.480',
+    change: '+2,4%',
     positive: true,
     icon: <FiPackage size={16} />,
   },
   {
     id: 'inventory',
-    label: 'Total Inventory',
-    value: '452,102',
-    change: '-0.8%',
+    label: 'Estoque total',
+    value: '452.102',
+    change: '-0,8%',
     positive: false,
     icon: <FiBox size={16} />,
   },
   {
     id: 'listings',
-    label: 'Active Listings',
-    value: '8,234',
-    change: '+5.1%',
+    label: 'Anúncios ativos',
+    value: '8.234',
+    change: '+5,1%',
     positive: true,
     icon: <FiShoppingBag size={16} />,
   },
   {
     id: 'sales',
-    label: 'Sales (Today)',
-    value: '$14,290',
-    change: '+12.3%',
+    label: 'Vendas (hoje)',
+    value: 'R$ 14.290',
+    change: '+12,3%',
     positive: true,
     icon: <FiDollarSign size={16} />,
   },
 ]
 
 const SALES_BY_DAY: SalesPoint[] = [
-  { day: 'Mon', value: 42 },
-  { day: 'Tue', value: 55 },
-  { day: 'Wed', value: 74 },
-  { day: 'Thu', value: 50 },
-  { day: 'Fri', value: 66 },
-  { day: 'Sat', value: 86, highlight: true },
-  { day: 'Sun', value: 70 },
+  { day: 'Seg', value: 42 },
+  { day: 'Ter', value: 55 },
+  { day: 'Qua', value: 74 },
+  { day: 'Qui', value: 50 },
+  { day: 'Sex', value: 66 },
+  { day: 'Sáb', value: 86, highlight: true },
+  { day: 'Dom', value: 70 },
 ]
 
 const RECENT_EVENTS: RecentEvent[] = [
   {
     id: '1',
-    title: 'Amazon Sync Complete',
-    description: 'Updated 240 listings across NA region.',
-    timeAgo: '2 min ago',
+    title: 'Sincronização Amazon concluída',
+    description: '240 anúncios atualizados na região NA.',
+    timeAgo: 'há 2 min',
     icon: <FiCheckCircle size={14} />,
     tone: 'success',
   },
   {
     id: '2',
-    title: 'New User Joined',
-    description: 'Sarah Miller added to Marketing team.',
-    timeAgo: '3 hours ago',
+    title: 'Novo usuário adicionado',
+    description: 'Sarah Miller entrou na equipe de marketing.',
+    timeAgo: 'há 3 h',
     icon: <FiUsers size={14} />,
     tone: 'neutral',
   },
   {
     id: '3',
-    title: 'Low Stock Detected',
-    description: '12 SKUs dropped below safety threshold.',
-    timeAgo: '5 hours ago',
+    title: 'Estoque baixo detectado',
+    description: '12 SKUs abaixo do limite de segurança.',
+    timeAgo: 'há 5 h',
     icon: <FiAlertTriangle size={14} />,
     tone: 'warning',
   },
   {
     id: '4',
-    title: 'Warehouse Activity',
-    description: 'Inbound shipment confirmed in Sao Paulo.',
-    timeAgo: '8 hours ago',
+    title: 'Atividade no armazém',
+    description: 'Recebimento confirmado em São Paulo.',
+    timeAgo: 'há 8 h',
     icon: <FiActivity size={14} />,
     tone: 'neutral',
   },
@@ -129,15 +129,15 @@ export function DashboardScreen() {
     <div style={styles.page}>
       <section style={styles.headerSection}>
         <div>
-          <h1 style={styles.pageTitle}>Dashboard Overview</h1>
-          <p style={styles.pageSubtitle}>Real-time sync and inventory metrics from all channels.</p>
+          <h1 style={styles.pageTitle}>Visão geral</h1>
+          <p style={styles.pageSubtitle}>Métricas de estoque e sincronização em tempo real.</p>
         </div>
         <div style={styles.headerActions}>
           <button type="button" style={styles.btnSecondary}>
-            Export Report
+            Exportar relatório
           </button>
           <button type="button" style={styles.btnPrimary}>
-            Sync All Stores
+            Sincronizar lojas
           </button>
         </div>
       </section>
@@ -169,21 +169,21 @@ export function DashboardScreen() {
             <FiAlertTriangle size={16} />
           </span>
           <div>
-            <p style={styles.lowStockTitle}>Low Stock Alerts</p>
-            <p style={styles.lowStockText}>12 items are currently below safety threshold.</p>
+            <p style={styles.lowStockTitle}>Alertas de estoque baixo</p>
+            <p style={styles.lowStockText}>12 itens estão abaixo do limite de segurança.</p>
           </div>
         </div>
         <button type="button" style={styles.lowStockBtn}>
-          View Items
+          Ver itens
         </button>
       </section>
 
       <section style={styles.bottomGrid}>
         <article style={styles.salesCard}>
           <div style={styles.sectionHead}>
-            <h2 style={styles.sectionTitle}>Sales per Marketplace</h2>
+            <h2 style={styles.sectionTitle}>Vendas por marketplace</h2>
             <button type="button" style={styles.rangeBtn}>
-              Last 7 Days
+              Últimos 7 dias
             </button>
           </div>
           <div style={styles.chartArea}>
@@ -207,7 +207,7 @@ export function DashboardScreen() {
 
         <aside style={styles.eventsCard}>
           <div style={styles.sectionHead}>
-            <h2 style={styles.sectionTitle}>Recent Events</h2>
+            <h2 style={styles.sectionTitle}>Eventos recentes</h2>
           </div>
           <div style={styles.eventsList}>
             {RECENT_EVENTS.map((event) => {
@@ -228,7 +228,7 @@ export function DashboardScreen() {
             })}
           </div>
           <button type="button" style={styles.viewHistoryBtn}>
-            View All History
+            Ver todo o histórico
           </button>
         </aside>
       </section>

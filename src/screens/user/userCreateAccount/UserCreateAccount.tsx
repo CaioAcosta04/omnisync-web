@@ -315,7 +315,7 @@ export function UserCreateAccount() {
               <Field
                 id="fullName"
                 label="Nome Completo"
-                placeholder="John Doe"
+                placeholder="João Silva"
                 value={fullName}
                 onChange={setFullName}
                 error={fieldErrors.fullName}
@@ -330,9 +330,9 @@ export function UserCreateAccount() {
               />
               <Field
                 id="email"
-                label="Email"
+                label="E-mail"
                 type="email"
-                placeholder="johndoe@email.com"
+                placeholder="seu@email.com"
                 value={email}
                 onChange={setEmail}
                 error={fieldErrors.email}

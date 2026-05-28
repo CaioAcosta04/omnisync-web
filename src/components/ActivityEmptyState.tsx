@@ -26,7 +26,7 @@ export function ActivityEmptyState({ onGoToMarketplaces, onGoToStock }: Activity
         </button>
         <button type="button" style={styles.secondaryBtn} onClick={onGoToStock}>
           <FiArchive size={16} />
-          Ir para Stock
+          Ir para Estoque
         </button>
       </div>
     </div>

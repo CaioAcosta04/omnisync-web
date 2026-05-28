@@ -23,10 +23,10 @@ type ManageUserModalProps = {
 }
 
 const ROLES: { id: UserRole; label: string; description: string }[] = [
-  { id: 'admin', label: 'Admin', description: 'Full platform access including billing and user management' },
-  { id: 'manager', label: 'Manager', description: 'Manage stock, listings, orders, and marketplaces' },
-  { id: 'editor', label: 'Editor', description: 'Create and edit listings and stock entries' },
-  { id: 'viewer', label: 'Viewer', description: 'View-only access to all platform data' },
+  { id: 'admin', label: 'Administrador', description: 'Acesso total à plataforma, incluindo faturamento e usuários' },
+  { id: 'manager', label: 'Gerente', description: 'Gerencia estoque, anúncios, vendas e marketplaces' },
+  { id: 'editor', label: 'Editor', description: 'Cria e edita anúncios e entradas de estoque' },
+  { id: 'viewer', label: 'Visualizador', description: 'Acesso somente leitura a todos os dados' },
 ]
 
 const ROLE_COLORS: Record<UserRole, { bg: string; color: string; border: string }> = {
@@ -37,15 +37,15 @@ const ROLE_COLORS: Record<UserRole, { bg: string; color: string; border: string 
 }
 
 const ALL_PERMISSIONS = [
-  'Full Access',
-  'User Management',
-  'Billing',
-  'Stock Management',
-  'Listings',
-  'Orders',
+  'Acesso total',
+  'Gestão de usuários',
+  'Faturamento',
+  'Gestão de estoque',
+  'Anúncios',
+  'Vendas',
   'Marketplaces',
-  'Activity',
-  'View Only',
+  'Atividade',
+  'Somente leitura',
 ]
 
 const AVATAR_COLORS: Record<string, string> = {
@@ -112,10 +112,10 @@ function ManageUserModalForm({
         {/* Header */}
         <div style={styles.header}>
           <div>
-            <h2 style={styles.title}>Manage User</h2>
-            <p style={styles.subtitle}>Update role, status, and permissions</p>
+            <h2 style={styles.title}>Gerenciar usuário</h2>
+            <p style={styles.subtitle}>Atualize função, status e permissões</p>
           </div>
-          <button type="button" style={styles.closeBtn} onClick={onClose} aria-label="Close">
+          <button type="button" style={styles.closeBtn} onClick={onClose} aria-label="Fechar">
             <FiX size={20} />
           </button>
         </div>
@@ -133,7 +133,7 @@ function ManageUserModalForm({
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
             <FiShield size={16} color="#6b7280" />
-            <span style={styles.sectionTitle}>Role</span>
+            <span style={styles.sectionTitle}>Função</span>
           </div>
           <div style={styles.rolesGrid}>
             {ROLES.map((r) => {
@@ -189,7 +189,7 @@ function ManageUserModalForm({
               onClick={() => setStatus('active')}
             >
               <span style={{ ...styles.statusDot, backgroundColor: '#22c55e' }} />
-              Active
+              Ativo
             </button>
             <button
               type="button"
@@ -200,7 +200,7 @@ function ManageUserModalForm({
               onClick={() => setStatus('inactive')}
             >
               <span style={{ ...styles.statusDot, backgroundColor: '#9ca3af' }} />
-              Inactive
+              Inativo
             </button>
           </div>
         </div>
@@ -209,7 +209,7 @@ function ManageUserModalForm({
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
             <FiShield size={16} color="#6b7280" />
-            <span style={styles.sectionTitle}>Permissions</span>
+            <span style={styles.sectionTitle}>Permissões</span>
           </div>
           <div style={styles.permGrid}>
             {ALL_PERMISSIONS.map((perm) => {
@@ -240,7 +240,7 @@ function ManageUserModalForm({
         {/* Actions */}
         <div style={styles.actions}>
           <button type="button" style={styles.cancelBtn} onClick={onClose} disabled={submitting}>
-            Cancel
+            Cancelar
           </button>
           <button
             type="button"
@@ -248,7 +248,7 @@ function ManageUserModalForm({
             onClick={handleSave}
             disabled={submitting}
           >
-            {submitting ? 'Saving…' : 'Save Changes'}
+            {submitting ? 'Salvando…' : 'Salvar alterações'}
           </button>
         </div>
       </div>

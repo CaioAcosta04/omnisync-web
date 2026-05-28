@@ -76,8 +76,8 @@ const CHANNEL_DISPLAY: Record<SaleChannel, { label: string; letter: string; colo
   MERCADO_LIVRE: { label: 'Mercado Livre', letter: 'M', color: '#ffe600' },
   SHOPEE: { label: 'Shopee', letter: 'S', color: '#f97316' },
   AMAZON: { label: 'Amazon', letter: 'A', color: '#f59e0b' },
-  PHYSICAL: { label: 'Physical', letter: 'P', color: '#9ca3af' },
-  MANUAL: { label: 'Manual', letter: 'm', color: '#8b5cf6' },
+  PHYSICAL: { label: 'Loja física', letter: 'P', color: '#9ca3af' },
+  MANUAL: { label: 'Manual', letter: 'M', color: '#8b5cf6' },
 }
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -107,15 +107,15 @@ function saleToEvents(
 ): ActivityEvent[] {
   const events: ActivityEvent[] = []
   const ch = CHANNEL_DISPLAY[sale.channel] ?? { label: sale.channel, letter: '?', color: '#9ca3af' }
-  const productName = productNamesById[sale.product_id] ?? `Product #${sale.product_id}`
+  const productName = productNamesById[sale.product_id] ?? `Produto #${sale.product_id}`
   const isCancelled = sale.status === 'CANCELLED'
   const day = getDayBucket(sale.created_at)
 
   const mainEvent: ActivityEvent = {
     id: `sale-${sale.id}`,
     type: isCancelled ? 'return' : 'order',
-    title: isCancelled ? `Sale Cancelled #${sale.id}` : `New Order #${sale.id}`,
-    description: isCancelled ? 'Order was cancelled for' : 'Customer placed an order for',
+    title: isCancelled ? `Venda cancelada #${sale.id}` : `Novo pedido #${sale.id}`,
+    description: isCancelled ? 'Pedido cancelado para' : 'Cliente comprou',
     linkedText: productName,
     time: formatRelative(sale.created_at),
     isoDate: sale.created_at,
@@ -123,7 +123,7 @@ function saleToEvents(
     source: ch.label,
     price: {
       amount: BRL.format(Number(sale.total_value)),
-      status: isCancelled ? 'Cancelled' : 'Paid',
+      status: isCancelled ? 'Cancelado' : 'Pago',
     },
     marketplaceBadges: [{ letter: ch.letter, color: ch.color }],
     marketplaceNames: ch.label,
@@ -144,7 +144,7 @@ function saleToEvents(
         title: log.action,
         description: statusChanged
           ? `Status: ${log.previous_status ?? '—'} → ${log.new_status ?? '—'}`
-          : `Sale #${sale.id} updated`,
+          : `Venda #${sale.id} atualizada`,
         time: formatRelative(log.created_at),
         isoDate: log.created_at,
         day: logDay,
@@ -336,8 +336,8 @@ export function ActivityScreen() {
               <span
                 style={{
                   ...styles.pricePaid,
-                  backgroundColor: event.price.status === 'Cancelled' ? '#fee2e2' : '#dcfce7',
-                  color: event.price.status === 'Cancelled' ? '#991b1b' : '#166534',
+                  backgroundColor: event.price.status === 'Cancelado' ? '#fee2e2' : '#dcfce7',
+                  color: event.price.status === 'Cancelado' ? '#991b1b' : '#166534',
                 }}
               >
                 {event.price.status}
@@ -408,10 +408,10 @@ export function ActivityScreen() {
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.headerLeft}>
-            <h1 style={styles.title}>Events & Activity</h1>
+            <h1 style={styles.title}>Eventos e atividade</h1>
             <span style={styles.liveBadge}>
               <span style={styles.liveDot} />
-              Live
+              Ao vivo
             </span>
           </div>
           <div style={styles.headerRight}>
@@ -419,7 +419,7 @@ export function ActivityScreen() {
               <FiSearch size={16} color="#9ca3af" />
               <input
                 type="text"
-                placeholder="Search events..."
+                placeholder="Buscar eventos..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={styles.searchInput}
@@ -439,12 +439,12 @@ export function ActivityScreen() {
                 style={syncing ? styles.spinIcon : undefined}
               />
             </button>
-            <button type="button" style={styles.iconBtn} aria-label="View logs">
+            <button type="button" style={styles.iconBtn} aria-label="Ver registros">
               <FiFileText size={18} color="#6b7280" />
             </button>
             <button type="button" style={styles.exportBtn}>
               <FiDownload size={16} />
-              Export Report
+              Exportar relatório
             </button>
           </div>
         </div>
@@ -453,9 +453,9 @@ export function ActivityScreen() {
         <div style={styles.filters}>
           <div style={styles.timeFilters}>
             {([
-              { id: 'all', label: 'All Time' },
-              { id: 'today', label: 'Today' },
-              { id: '7d', label: 'Last 7d' },
+              { id: 'all', label: 'Todo período' },
+              { id: 'today', label: 'Hoje' },
+              { id: '7d', label: 'Últimos 7 dias' },
             ] as const).map((t) => (
               <button
                 key={t.id}
@@ -473,13 +473,13 @@ export function ActivityScreen() {
 
           <button type="button" style={styles.dropdownBtn}>
             <FiTrendingUp size={14} color="#6b7280" />
-            Marketplace: All
+            Marketplace: Todos
             <FiChevronDown size={14} color="#6b7280" />
           </button>
 
           <button type="button" style={styles.dropdownBtn}>
             <FiShoppingCart size={14} color="#6b7280" />
-            Product: All Products
+            Produto: Todos
             <FiChevronDown size={14} color="#6b7280" />
           </button>
         </div>
@@ -504,7 +504,7 @@ export function ActivityScreen() {
         {!loading && !error && totalElements === 0 && (
           <ActivityEmptyState
             onGoToMarketplaces={() => navigateTo('Marketplaces')}
-            onGoToStock={() => navigateTo('Stock')}
+            onGoToStock={() => navigateTo('Estoque')}
           />
         )}
 
@@ -514,7 +514,7 @@ export function ActivityScreen() {
             {todayEvents.length > 0 && (
               <>
                 <div style={styles.dayDivider}>
-                  <span style={styles.dayLabel}>TODAY</span>
+                  <span style={styles.dayLabel}>HOJE</span>
                   <div style={styles.dayLine} />
                 </div>
                 <div style={styles.eventList}>
@@ -526,7 +526,7 @@ export function ActivityScreen() {
             {yesterdayEvents.length > 0 && (
               <>
                 <div style={styles.dayDivider}>
-                  <span style={styles.dayLabel}>YESTERDAY</span>
+                  <span style={styles.dayLabel}>ONTEM</span>
                   <div style={styles.dayLine} />
                 </div>
                 <div style={styles.eventList}>
@@ -538,7 +538,7 @@ export function ActivityScreen() {
             {olderEvents.length > 0 && (
               <>
                 <div style={styles.dayDivider}>
-                  <span style={styles.dayLabel}>OLDER</span>
+                  <span style={styles.dayLabel}>ANTERIORES</span>
                   <div style={styles.dayLine} />
                 </div>
                 <div style={styles.eventList}>
@@ -560,7 +560,7 @@ export function ActivityScreen() {
                 onClick={() => void handleLoadMore()}
                 disabled={loadingMore}
               >
-                {loadingMore ? 'Carregando…' : 'Load previous activity'}
+                {loadingMore ? 'Carregando…' : 'Carregar atividade anterior'}
                 {!loadingMore && <FiChevronDown size={16} />}
               </button>
             )}
@@ -570,17 +570,17 @@ export function ActivityScreen() {
 
       {/* Right sidebar */}
       <aside style={styles.sidebar}>
-        <h3 style={styles.sidebarSectionTitle}>REAL-TIME STATS</h3>
+        <h3 style={styles.sidebarSectionTitle}>ESTATÍSTICAS EM TEMPO REAL</h3>
 
         {/* Sales Velocity */}
         <div style={styles.statCard}>
           <div style={styles.statHeader}>
-            <span style={styles.statLabel}>Sales Velocity</span>
+            <span style={styles.statLabel}>Velocidade de vendas</span>
             <span style={styles.statTrend}>+12%</span>
           </div>
           <div style={styles.statValue}>
             <span style={styles.statBigNumber}>42</span>
-            <span style={styles.statUnit}>orders/hr</span>
+            <span style={styles.statUnit}>pedidos/h</span>
           </div>
           <div style={styles.barChart}>
             {[35, 50, 40, 55, 45, 60, 80].map((h, i) => (
@@ -598,7 +598,7 @@ export function ActivityScreen() {
 
         {/* Health Status */}
         <div style={styles.statCard}>
-          <span style={styles.statLabel}>Health Status</span>
+          <span style={styles.statLabel}>Status de saúde</span>
           <div style={styles.healthList}>
             {HEALTH_ITEMS.map((item) => (
               <div key={item.name} style={styles.healthRow}>
@@ -623,9 +623,9 @@ export function ActivityScreen() {
         </div>
 
         {/* Quick Links */}
-        <h3 style={{ ...styles.sidebarSectionTitle, marginTop: '24px' }}>QUICK LINKS</h3>
+        <h3 style={{ ...styles.sidebarSectionTitle, marginTop: '24px' }}>ATALHOS</h3>
         <div style={styles.quickLinks}>
-          {['Audit Logs', 'Sync Settings'].map((link) => (
+          {['Registros de auditoria', 'Configurações de sync'].map((link) => (
             <button key={link} type="button" style={styles.quickLinkBtn}>
               <span>{link}</span>
               <FiChevronRight size={16} color="#9ca3af" />
