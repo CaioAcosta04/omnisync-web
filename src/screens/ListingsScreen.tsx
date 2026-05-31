@@ -6,6 +6,7 @@ import {
   FiChevronRight,
   FiClock,
   FiExternalLink,
+  FiPlus,
   FiRefreshCw,
   FiSearch,
   FiShoppingBag,
@@ -13,12 +14,15 @@ import {
 } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
 import { getProductImageUrl } from '../lib/productImage'
+import { hasMercadoLivreListing } from '../lib/productMercadoLivre'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
+import { AnnounceProductModal } from '../components/AnnounceProductModal'
 import { ProductImageThumb } from '../components/ProductImageThumb'
 import { ProductDetailDialog } from '../components/ProductDetailDialog'
+import { SelectProductToAnnounceModal } from '../components/SelectProductToAnnounceModal'
 import { formatRelative } from '../lib/relativeTime'
-import { listProducts, syncMercadoLivreProducts } from '../services/productsApi'
-import type { ProductDto } from '../types/product'
+import { announceProduct, listProducts, syncMercadoLivreProducts } from '../services/productsApi'
+import type { MercadoLivreProductMetadata, ProductDto } from '../types/product'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -108,6 +112,10 @@ export function ListingsScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
+  const [showSelectProductModal, setShowSelectProductModal] = useState(false)
+  const [announceTarget, setAnnounceTarget] = useState<ProductDto | null>(null)
+  const [announceSubmitting, setAnnounceSubmitting] = useState(false)
+  const [announceError, setAnnounceError] = useState<string | null>(null)
 
   const fetchListings = useCallback(async () => {
     if (systemClientId == null) return
@@ -142,6 +150,32 @@ export function ListingsScreen() {
       setSyncing(false)
     }
   }, [systemClientId, syncing, fetchListings])
+
+  const unannouncedProducts = useMemo(
+    () => products.filter((p) => !hasMercadoLivreListing(p)),
+    [products]
+  )
+
+  const handleSelectProductToAnnounce = (product: ProductDto) => {
+    setShowSelectProductModal(false)
+    setAnnounceError(null)
+    setAnnounceTarget(product)
+  }
+
+  const handleAnnounce = async (mlMetadata: MercadoLivreProductMetadata) => {
+    if (systemClientId == null || announceTarget == null) return
+    setAnnounceSubmitting(true)
+    setAnnounceError(null)
+    try {
+      await announceProduct(systemClientId, announceTarget.id, mlMetadata)
+      setAnnounceTarget(null)
+      await fetchListings()
+    } catch (e) {
+      setAnnounceError(e instanceof Error ? e.message : 'Não foi possível publicar o anúncio.')
+    } finally {
+      setAnnounceSubmitting(false)
+    }
+  }
 
   // Derive ML listings from all products
   const allListings = useMemo<MlListing[]>(() => {
@@ -286,6 +320,23 @@ export function ListingsScreen() {
           <button
             type="button"
             style={{
+              ...styles.announceBtn,
+              ...(!mlConnected ? styles.syncBtnDisabled : {}),
+            }}
+            onClick={() => setShowSelectProductModal(true)}
+            disabled={!mlConnected}
+            title={
+              !mlConnected
+                ? 'Conecte o Mercado Livre para anunciar'
+                : 'Anunciar produto da loja no Mercado Livre'
+            }
+          >
+            <FiPlus size={16} />
+            Anunciar produto
+          </button>
+          <button
+            type="button"
+            style={{
               ...styles.syncBtn,
               ...(!mlConnected || syncing ? styles.syncBtnDisabled : {}),
             }}
@@ -418,17 +469,31 @@ export function ListingsScreen() {
               </div>
               <h3 style={styles.emptyTitle}>Nenhum anúncio encontrado</h3>
               <p style={styles.emptySubtitle}>
-                Clique em "Sincronizar ML" para importar seus anúncios do Mercado Livre.
+                {unannouncedProducts.length > 0
+                  ? 'Anuncie um produto da loja ou sincronize os anúncios já existentes no Mercado Livre.'
+                  : 'Clique em "Sincronizar ML" para importar seus anúncios do Mercado Livre.'}
               </p>
-              <button
-                type="button"
-                style={styles.syncCtaBtn}
-                onClick={handleSync}
-                disabled={syncing}
-              >
-                <FiRefreshCw size={15} style={syncing ? styles.spinIcon : undefined} />
-                {syncing ? 'Sincronizando…' : 'Sincronizar agora'}
-              </button>
+              <div style={styles.emptyActions}>
+                {unannouncedProducts.length > 0 && (
+                  <button
+                    type="button"
+                    style={styles.announceCtaBtn}
+                    onClick={() => setShowSelectProductModal(true)}
+                  >
+                    <FiPlus size={15} />
+                    Anunciar produto
+                  </button>
+                )}
+                <button
+                  type="button"
+                  style={styles.syncCtaBtn}
+                  onClick={handleSync}
+                  disabled={syncing}
+                >
+                  <FiRefreshCw size={15} style={syncing ? styles.spinIcon : undefined} />
+                  {syncing ? 'Sincronizando…' : 'Sincronizar agora'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -597,8 +662,33 @@ export function ListingsScreen() {
           productId={selectedProductId}
           systemClientId={systemClientId}
           initialProduct={selectedProduct}
+          mlConnected={mlConnected}
           onClose={() => setSelectedProductId(null)}
           onChanged={() => void fetchListings()}
+        />
+      )}
+
+      <SelectProductToAnnounceModal
+        open={showSelectProductModal}
+        products={unannouncedProducts}
+        onClose={() => setShowSelectProductModal(false)}
+        onSelect={handleSelectProductToAnnounce}
+      />
+
+      {announceTarget != null && systemClientId != null && (
+        <AnnounceProductModal
+          open={announceTarget != null}
+          product={announceTarget}
+          systemClientId={systemClientId}
+          onClose={() => {
+            if (!announceSubmitting) {
+              setAnnounceTarget(null)
+              setAnnounceError(null)
+            }
+          }}
+          onSubmit={handleAnnounce}
+          submitting={announceSubmitting}
+          errorMessage={announceError}
         />
       )}
     </div>
@@ -674,6 +764,20 @@ const styles = {
     fontWeight: 600,
     color: '#333333',
     backgroundColor: '#ffe600',
+    cursor: 'pointer',
+  },
+  announceBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 20px',
+    borderRadius: '10px',
+    border: '1px solid #e5e7eb',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#374151',
+    backgroundColor: '#ffffff',
     cursor: 'pointer',
   },
   syncBtnDisabled: {
@@ -819,6 +923,27 @@ const styles = {
     fontWeight: 600,
     color: '#333333',
     backgroundColor: '#ffe600',
+    cursor: 'pointer',
+  },
+  emptyActions: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: '10px',
+    justifyContent: 'center',
+    marginTop: '4px',
+  },
+  announceCtaBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 22px',
+    borderRadius: '10px',
+    border: '1px solid #e5e7eb',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#374151',
+    backgroundColor: '#ffffff',
     cursor: 'pointer',
   },
 

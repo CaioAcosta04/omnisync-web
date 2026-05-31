@@ -1,5 +1,11 @@
 import { apiFetch } from '../lib/apiFetch'
-import type { MercadoLivreSyncResponse, PageResponse, ProductCreateRequest, ProductDto } from '../types/product'
+import type {
+  MercadoLivreProductMetadata,
+  MercadoLivreSyncResponse,
+  PageResponse,
+  ProductCreateRequest,
+  ProductDto,
+} from '../types/product'
 
 export async function listProducts(
   systemClientId: number,
@@ -85,6 +91,23 @@ export async function deleteProduct(
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || 'Não foi possível remover o produto.')
+  }
+  return (await res.json()) as ProductDto
+}
+
+export async function announceProduct(
+  systemClientId: number,
+  id: number,
+  mlMetadata: MercadoLivreProductMetadata
+): Promise<ProductDto> {
+  const res = await apiFetch(`/api/products/${systemClientId}/${id}/announce`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(mlMetadata),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || 'Não foi possível anunciar o produto no Mercado Livre.')
   }
   return (await res.json()) as ProductDto
 }

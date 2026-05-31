@@ -506,6 +506,7 @@ export function StockScreen() {
           productId={selectedProductId}
           systemClientId={systemClientId}
           initialProduct={selectedProduct}
+          mlConnected={mlConnected}
           onClose={() => setSelectedProductId(null)}
           onChanged={() => void fetchProducts()}
         />

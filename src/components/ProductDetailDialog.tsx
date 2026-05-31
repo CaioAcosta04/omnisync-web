@@ -5,9 +5,11 @@ import {
   FiPause,
   FiPlay,
   FiRefreshCw,
+  FiShoppingBag,
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
+import { AnnounceProductModal } from './AnnounceProductModal'
 import { ProductImageThumb } from './ProductImageThumb'
 import { getProductImageUrl } from '../lib/productImage'
 import {
@@ -16,13 +18,14 @@ import {
   hasMercadoLivreListing,
 } from '../lib/productMercadoLivre'
 import { formatRelative } from '../lib/relativeTime'
-import { deleteProduct, getProduct, updateProduct } from '../services/productsApi'
-import type { ProductDto } from '../types/product'
+import { deleteProduct, announceProduct, getProduct, updateProduct } from '../services/productsApi'
+import type { MercadoLivreProductMetadata, ProductDto } from '../types/product'
 
 type ProductDetailDialogProps = {
   productId: number | null
   systemClientId: number
   initialProduct?: ProductDto | null
+  mlConnected?: boolean
   onClose: () => void
   onChanged: () => void
 }
@@ -74,6 +77,7 @@ export function ProductDetailDialog({
   productId,
   systemClientId,
   initialProduct,
+  mlConnected = false,
   onClose,
   onChanged,
 }: ProductDetailDialogProps) {
@@ -85,6 +89,9 @@ export function ProductDetailDialog({
   const [editing, setEditing] = useState(false)
   const [editFields, setEditFields] = useState<EditFields | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showAnnounceModal, setShowAnnounceModal] = useState(false)
+  const [announceSubmitting, setAnnounceSubmitting] = useState(false)
+  const [announceError, setAnnounceError] = useState<string | null>(null)
 
   const loadProduct = useCallback(async () => {
     if (productId == null) return
@@ -106,6 +113,8 @@ export function ProductDetailDialog({
     setEditing(false)
     setConfirmDelete(false)
     setActionError(null)
+    setShowAnnounceModal(false)
+    setAnnounceError(null)
     const cached = initialProduct?.id === productId ? initialProduct : null
     if (cached) {
       setProduct(cached)
@@ -218,6 +227,25 @@ export function ProductDetailDialog({
       setSubmitting(false)
     }
   }
+
+  const handleAnnounce = async (mlMetadata: MercadoLivreProductMetadata) => {
+    if (product == null) return
+    setAnnounceSubmitting(true)
+    setAnnounceError(null)
+    try {
+      const updated = await announceProduct(systemClientId, product.id, mlMetadata)
+      setProduct(updated)
+      setEditFields(toEditFields(updated))
+      setShowAnnounceModal(false)
+      onChanged()
+    } catch (e) {
+      setAnnounceError(e instanceof Error ? e.message : 'Não foi possível publicar o anúncio.')
+    } finally {
+      setAnnounceSubmitting(false)
+    }
+  }
+
+  const canAnnounce = !mlLinked && mlConnected && !submitting && !editing && !confirmDelete
 
   const canPause =
     mlLinked && mlStatusKey === 'active' && availableQty > 0 && !submitting && !editing
@@ -397,17 +425,36 @@ export function ProductDetailDialog({
             )}
 
             {!mlLinked && (
-              <p style={styles.hint}>
-                Este produto não possui anúncio no Mercado Livre. Edição e exclusão exigem
-                sincronização com um anúncio ML.
-              </p>
+              <div style={styles.unannouncedBox}>
+                <p style={styles.unannouncedText}>
+                  Este produto ainda não possui anúncio no Mercado Livre.
+                  {mlConnected
+                    ? ' Você pode publicá-lo agora ou continuar gerenciando apenas na loja.'
+                    : ' Conecte sua conta do Mercado Livre para anunciar.'}
+                </p>
+                {canAnnounce && (
+                  <button
+                    type="button"
+                    style={styles.announceBtn}
+                    onClick={() => {
+                      setAnnounceError(null)
+                      setShowAnnounceModal(true)
+                    }}
+                  >
+                    <FiShoppingBag size={16} />
+                    Anunciar no Mercado Livre
+                  </button>
+                )}
+              </div>
             )}
 
             {confirmDelete ? (
               <div style={styles.confirmBox}>
                 <p style={styles.confirmText}>
-                  Excluir <strong>{product.name}</strong>? O anúncio no Mercado Livre também será
-                  removido.
+                  Excluir <strong>{product.name}</strong>?
+                  {mlLinked
+                    ? ' O anúncio no Mercado Livre também será removido.'
+                    : ' Esta ação não pode ser desfeita.'}
                 </p>
                 <div style={styles.confirmActions}>
                   <button
@@ -444,10 +491,10 @@ export function ProductDetailDialog({
                       type="button"
                       style={{
                         ...styles.primaryBtn,
-                        ...(submitting || !mlLinked ? styles.btnDisabled : {}),
+                        ...(submitting ? styles.btnDisabled : {}),
                       }}
                       onClick={() => void handleSave()}
-                      disabled={submitting || !mlLinked}
+                      disabled={submitting}
                     >
                       {submitting ? 'Salvando…' : 'Salvar alterações'}
                     </button>
@@ -500,10 +547,10 @@ export function ProductDetailDialog({
                       type="button"
                       style={{
                         ...styles.secondaryBtn,
-                        ...(!mlLinked || submitting ? styles.btnDisabled : {}),
+                        ...(submitting ? styles.btnDisabled : {}),
                       }}
                       onClick={handleStartEdit}
-                      disabled={!mlLinked || submitting}
+                      disabled={submitting}
                     >
                       <FiEdit2 size={16} />
                       Editar
@@ -512,10 +559,10 @@ export function ProductDetailDialog({
                       type="button"
                       style={{
                         ...styles.dangerOutlineBtn,
-                        ...(!mlLinked || submitting ? styles.btnDisabled : {}),
+                        ...(submitting ? styles.btnDisabled : {}),
                       }}
                       onClick={() => setConfirmDelete(true)}
-                      disabled={!mlLinked || submitting}
+                      disabled={submitting}
                     >
                       <FiTrash2 size={16} />
                       Excluir
@@ -526,6 +573,23 @@ export function ProductDetailDialog({
             )}
           </>
         ) : null}
+
+        {product != null && showAnnounceModal && (
+          <AnnounceProductModal
+            open={showAnnounceModal}
+            product={product}
+            systemClientId={systemClientId}
+            onClose={() => {
+              if (!announceSubmitting) {
+                setShowAnnounceModal(false)
+                setAnnounceError(null)
+              }
+            }}
+            onSubmit={handleAnnounce}
+            submitting={announceSubmitting}
+            errorMessage={announceError}
+          />
+        )}
       </div>
     </div>
   )
@@ -749,6 +813,37 @@ const styles = {
     padding: '10px 12px',
     marginBottom: '16px',
     lineHeight: 1.4,
+  },
+  unannouncedBox: {
+    marginBottom: '16px',
+    padding: '14px 16px',
+    borderRadius: '12px',
+    backgroundColor: '#fffbeb',
+    border: '1px solid #fde68a',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '12px',
+  },
+  unannouncedText: {
+    fontSize: '13px',
+    color: '#92400e',
+    margin: 0,
+    lineHeight: 1.4,
+  },
+  announceBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    alignSelf: 'flex-start' as const,
+    padding: '10px 18px',
+    borderRadius: '10px',
+    border: 'none',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#111827',
+    backgroundColor: '#ffe600',
+    cursor: 'pointer',
   },
   actions: {
     display: 'flex',
