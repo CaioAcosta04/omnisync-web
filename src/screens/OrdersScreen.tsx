@@ -123,18 +123,24 @@ export function OrdersScreen() {
       setSubmitError(null)
       try {
         const resource = data.note ? { note: data.note } : undefined
-        await createSales(systemClientId, [
-          {
+        await createSales(
+          systemClientId,
+          data.items.map((item) => ({
             systemClientId,
-            productId: data.productId,
-            quantity: data.quantity,
-            totalValue: data.totalValue,
-            channel: 'PHYSICAL',
+            productId: item.productId,
+            quantity: item.quantity,
+            totalValue: item.totalValue,
+            channel: 'PHYSICAL' as const,
             resource,
-          },
-        ])
+          })),
+        )
         setShowRegisterModal(false)
-        setSuccessMessage('Venda registrada com sucesso.')
+        const count = data.items.length
+        setSuccessMessage(
+          count === 1
+            ? 'Venda registrada com sucesso.'
+            : `${count} itens registrados com sucesso.`,
+        )
         await fetchSales()
         await fetchProducts()
       } catch (e) {

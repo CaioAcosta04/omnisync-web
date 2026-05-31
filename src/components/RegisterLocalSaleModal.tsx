@@ -1,14 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FiPackage, FiSearch, FiX } from 'react-icons/fi'
+import { FiPlus, FiSearch, FiTrash2, FiX } from 'react-icons/fi'
 import { ProductImageThumb } from './ProductImageThumb'
 import { getProductImageUrl } from '../lib/productImage'
 import type { ProductDto } from '../types/product'
 
-export type LocalSaleFormData = {
+export type LocalSaleLineItem = {
   productId: number
   quantity: number
   totalValue: number
+}
+
+export type LocalSaleFormData = {
+  items: LocalSaleLineItem[]
   note: string
+}
+
+type CartEntry = {
+  productId: number
+  quantity: string
+  totalValue: string
+  totalTouched: boolean
 }
 
 type RegisterLocalSaleModalProps = {
@@ -27,6 +38,10 @@ function availableQty(product: ProductDto): number {
   return Math.max(0, product.stock - product.reserved_stock)
 }
 
+function suggestedLineTotal(product: ProductDto, quantity: number): number {
+  return product.price * quantity
+}
+
 export function RegisterLocalSaleModal({
   open,
   products,
@@ -37,20 +52,22 @@ export function RegisterLocalSaleModal({
   onSubmit,
 }: RegisterLocalSaleModalProps) {
   const [search, setSearch] = useState('')
-  const [productId, setProductId] = useState<number | null>(null)
-  const [quantity, setQuantity] = useState('1')
-  const [totalValue, setTotalValue] = useState('')
-  const [totalTouched, setTotalTouched] = useState(false)
+  const [addQuantity, setAddQuantity] = useState('1')
+  const [cart, setCart] = useState<CartEntry[]>([])
   const [note, setNote] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+
+  const productsById = useMemo(() => {
+    const map = new Map<number, ProductDto>()
+    for (const p of products) map.set(p.id, p)
+    return map
+  }, [products])
 
   useEffect(() => {
     if (!open) return
     setSearch('')
-    setProductId(null)
-    setQuantity('1')
-    setTotalValue('')
-    setTotalTouched(false)
+    setAddQuantity('1')
+    setCart([])
     setNote('')
     setFormError(null)
   }, [open])
@@ -63,58 +80,122 @@ export function RegisterLocalSaleModal({
     )
   }, [products, search])
 
-  const selectedProduct = useMemo(
-    () => products.find((p) => p.id === productId) ?? null,
-    [products, productId],
-  )
+  const cartProductIds = useMemo(() => new Set(cart.map((c) => c.productId)), [cart])
 
-  const suggestedTotal = useMemo(() => {
-    if (selectedProduct == null) return null
-    const qty = Number(quantity)
-    if (Number.isNaN(qty) || qty <= 0) return null
-    return selectedProduct.price * qty
-  }, [selectedProduct, quantity])
-
-  useEffect(() => {
-    if (totalTouched || suggestedTotal == null) return
-    setTotalValue(suggestedTotal.toFixed(2))
-  }, [suggestedTotal, totalTouched])
+  const orderTotal = useMemo(() => {
+    return cart.reduce((sum, entry) => {
+      const total = Number(entry.totalValue)
+      return sum + (Number.isNaN(total) ? 0 : total)
+    }, 0)
+  }, [cart])
 
   if (!open) return null
+
+  const addToCart = (product: ProductDto) => {
+    setFormError(null)
+    const qty = Number(addQuantity)
+    if (!Number.isInteger(qty) || qty <= 0) {
+      setFormError('Informe uma quantidade válida para adicionar.')
+      return
+    }
+
+    const available = availableQty(product)
+    const existing = cart.find((c) => c.productId === product.id)
+    const currentQty = existing ? Number(existing.quantity) || 0 : 0
+    const newQty = currentQty + qty
+
+    if (newQty > available) {
+      setFormError(
+        `Estoque insuficiente para ${product.name}. Disponível: ${available} un.${existing ? ` (${currentQty} já no pedido)` : ''}`,
+      )
+      return
+    }
+
+    const suggested = suggestedLineTotal(product, newQty)
+
+    setCart((prev) => {
+      if (existing) {
+        return prev.map((entry) =>
+          entry.productId === product.id
+            ? {
+                ...entry,
+                quantity: String(newQty),
+                totalValue: entry.totalTouched ? entry.totalValue : suggested.toFixed(2),
+              }
+            : entry,
+        )
+      }
+      return [
+        ...prev,
+        {
+          productId: product.id,
+          quantity: String(qty),
+          totalValue: suggested.toFixed(2),
+          totalTouched: false,
+        },
+      ]
+    })
+  }
+
+  const updateCartEntry = (productId: number, patch: Partial<CartEntry>) => {
+    setFormError(null)
+    setCart((prev) =>
+      prev.map((entry) => (entry.productId === productId ? { ...entry, ...patch } : entry)),
+    )
+  }
+
+  const removeFromCart = (productId: number) => {
+    setFormError(null)
+    setCart((prev) => prev.filter((entry) => entry.productId !== productId))
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
 
-    if (productId == null) {
-      setFormError('Selecione um produto.')
+    if (cart.length === 0) {
+      setFormError('Adicione ao menos um produto ao pedido.')
       return
     }
 
-    const qty = Number(quantity)
-    if (!Number.isInteger(qty) || qty <= 0) {
-      setFormError('Informe uma quantidade válida.')
-      return
+    const items: LocalSaleLineItem[] = []
+    const usedStock = new Map<number, number>()
+
+    for (const entry of cart) {
+      const product = productsById.get(entry.productId)
+      if (product == null) {
+        setFormError('Produto inválido no pedido.')
+        return
+      }
+
+      const qty = Number(entry.quantity)
+      if (!Number.isInteger(qty) || qty <= 0) {
+        setFormError(`Quantidade inválida para ${product.name}.`)
+        return
+      }
+
+      const total = Number(entry.totalValue)
+      if (Number.isNaN(total) || total < 0) {
+        setFormError(`Valor inválido para ${product.name}.`)
+        return
+      }
+
+      const available = availableQty(product)
+      const accumulated = (usedStock.get(product.id) ?? 0) + qty
+      if (accumulated > available) {
+        setFormError(`Estoque insuficiente para ${product.name}. Disponível: ${available} un.`)
+        return
+      }
+      usedStock.set(product.id, accumulated)
+
+      items.push({
+        productId: product.id,
+        quantity: qty,
+        totalValue: total,
+      })
     }
 
-    const available = selectedProduct != null ? availableQty(selectedProduct) : 0
-    if (qty > available) {
-      setFormError(`Estoque insuficiente. Disponível: ${available} un.`)
-      return
-    }
-
-    const total = Number(totalValue)
-    if (Number.isNaN(total) || total < 0) {
-      setFormError('Informe um valor total válido.')
-      return
-    }
-
-    void onSubmit({
-      productId,
-      quantity: qty,
-      totalValue: total,
-      note: note.trim(),
-    })
+    void onSubmit({ items, note: note.trim() })
   }
 
   return (
@@ -124,7 +205,8 @@ export function RegisterLocalSaleModal({
           <div>
             <h2 style={styles.title}>Registrar venda na loja</h2>
             <p style={styles.subtitle}>
-              Baixa o estoque local e sincroniza com o Mercado Livre, se houver anúncio.
+              Adicione quantos produtos quiser. O estoque é baixado e sincronizado com o Mercado
+              Livre, se houver anúncio.
             </p>
           </div>
           <button type="button" style={styles.closeBtn} onClick={onClose} aria-label="Fechar">
@@ -138,17 +220,34 @@ export function RegisterLocalSaleModal({
 
         <form onSubmit={handleSubmit}>
           <div style={styles.field}>
-            <label style={styles.label}>Produto</label>
-            <div style={styles.searchWrap}>
-              <FiSearch size={16} color="#9ca3af" />
-              <input
-                type="text"
-                placeholder="Buscar por nome ou SKU…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={styles.searchInput}
-                disabled={submitting || loadingProducts}
-              />
+            <label style={styles.label}>Adicionar produtos</label>
+            <div style={styles.addRow}>
+              <div style={{ ...styles.searchWrap, flex: 1 }}>
+                <FiSearch size={16} color="#9ca3af" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome ou SKU…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={styles.searchInput}
+                  disabled={submitting || loadingProducts}
+                />
+              </div>
+              <div style={styles.addQtyWrap}>
+                <label style={styles.addQtyLabel} htmlFor="add-quantity">
+                  Qtd.
+                </label>
+                <input
+                  id="add-quantity"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={addQuantity}
+                  onChange={(e) => setAddQuantity(e.target.value)}
+                  style={styles.addQtyInput}
+                  disabled={submitting || loadingProducts}
+                />
+              </div>
             </div>
             <div style={styles.productList}>
               {loadingProducts ? (
@@ -158,24 +257,16 @@ export function RegisterLocalSaleModal({
               ) : (
                 filteredProducts.map((product) => {
                   const available = availableQty(product)
-                  const isSelected = product.id === productId
+                  const inCart = cartProductIds.has(product.id)
                   const disabled = available === 0
                   return (
-                    <button
+                    <div
                       key={product.id}
-                      type="button"
                       style={{
                         ...styles.productOption,
-                        ...(isSelected ? styles.productOptionSelected : {}),
+                        ...(inCart ? styles.productOptionInCart : {}),
                         ...(disabled ? styles.productOptionDisabled : {}),
                       }}
-                      onClick={() => {
-                        if (disabled) return
-                        setProductId(product.id)
-                        setTotalTouched(false)
-                        setQuantity('1')
-                      }}
-                      disabled={submitting || disabled}
                     >
                       <ProductImageThumb
                         src={getProductImageUrl(product)}
@@ -188,64 +279,144 @@ export function RegisterLocalSaleModal({
                           SKU {product.sku} · {BRL.format(product.price)} · {available} disp.
                         </span>
                       </div>
-                    </button>
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.addBtn,
+                          ...(disabled || submitting ? styles.addBtnDisabled : {}),
+                        }}
+                        onClick={() => addToCart(product)}
+                        disabled={submitting || disabled}
+                        title={disabled ? 'Sem estoque' : 'Adicionar ao pedido'}
+                      >
+                        <FiPlus size={14} />
+                        {inCart ? 'Mais' : 'Adicionar'}
+                      </button>
+                    </div>
                   )
                 })
               )}
             </div>
           </div>
 
-          {selectedProduct != null && (
-            <div style={styles.selectedCard}>
-              <FiPackage size={18} color="#2563eb" />
-              <div>
-                <span style={styles.selectedName}>{selectedProduct.name}</span>
-                <span style={styles.selectedMeta}>
-                  Preço unitário: {BRL.format(selectedProduct.price)} · Disponível:{' '}
-                  {availableQty(selectedProduct)} un.
+          <div style={styles.field}>
+            <div style={styles.cartHeader}>
+              <label style={styles.label}>Itens da venda</label>
+              {cart.length > 0 && (
+                <span style={styles.cartCount}>
+                  {cart.length} {cart.length === 1 ? 'item' : 'itens'}
                 </span>
+              )}
+            </div>
+
+            {cart.length === 0 ? (
+              <div style={styles.cartEmpty}>
+                Nenhum produto adicionado. Use a lista acima para montar o pedido.
               </div>
+            ) : (
+              <div style={styles.cartList}>
+                {cart.map((entry) => {
+                  const product = productsById.get(entry.productId)
+                  if (product == null) return null
+                  const qty = Number(entry.quantity)
+                  const suggested =
+                    !Number.isNaN(qty) && qty > 0 ? suggestedLineTotal(product, qty) : null
+
+                  return (
+                    <div key={entry.productId} style={styles.cartItem}>
+                      <div style={styles.cartItemTop}>
+                        <ProductImageThumb
+                          src={getProductImageUrl(product)}
+                          alt={product.name}
+                          size={32}
+                        />
+                        <div style={styles.cartItemInfo}>
+                          <span style={styles.cartItemName}>{product.name}</span>
+                          <span style={styles.cartItemMeta}>
+                            {BRL.format(product.price)} / un. · {availableQty(product)} disp.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          style={styles.removeBtn}
+                          onClick={() => removeFromCart(entry.productId)}
+                          disabled={submitting}
+                          aria-label={`Remover ${product.name}`}
+                        >
+                          <FiTrash2 size={15} />
+                        </button>
+                      </div>
+                      <div style={styles.cartItemFields}>
+                        <div style={styles.cartField}>
+                          <label style={styles.cartFieldLabel}>Qtd.</label>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={entry.quantity}
+                            onChange={(e) => {
+                              const nextQty = e.target.value
+                              const parsed = Number(nextQty)
+                              updateCartEntry(entry.productId, {
+                                quantity: nextQty,
+                                totalTouched: false,
+                                totalValue:
+                                  !Number.isNaN(parsed) && parsed > 0
+                                    ? suggestedLineTotal(product, parsed).toFixed(2)
+                                    : entry.totalValue,
+                              })
+                            }}
+                            style={styles.cartInput}
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div style={{ ...styles.cartField, flex: 1 }}>
+                          <label style={styles.cartFieldLabel}>Subtotal (R$)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={entry.totalValue}
+                            onChange={(e) =>
+                              updateCartEntry(entry.productId, {
+                                totalValue: e.target.value,
+                                totalTouched: true,
+                              })
+                            }
+                            style={styles.cartInput}
+                            disabled={submitting}
+                          />
+                        </div>
+                      </div>
+                      {suggested != null &&
+                        entry.totalTouched &&
+                        Number(entry.totalValue) !== suggested && (
+                          <button
+                            type="button"
+                            style={styles.suggestLink}
+                            onClick={() =>
+                              updateCartEntry(entry.productId, {
+                                totalValue: suggested.toFixed(2),
+                                totalTouched: false,
+                              })
+                            }
+                          >
+                            Usar sugerido: {BRL.format(suggested)}
+                          </button>
+                        )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {cart.length > 0 && (
+            <div style={styles.orderTotalRow}>
+              <span style={styles.orderTotalLabel}>Total do pedido</span>
+              <span style={styles.orderTotalValue}>{BRL.format(orderTotal)}</span>
             </div>
           )}
-
-          <div style={styles.row}>
-            <div style={styles.fieldHalf}>
-              <label style={styles.label} htmlFor="sale-quantity">
-                Quantidade
-              </label>
-              <input
-                id="sale-quantity"
-                type="number"
-                min={1}
-                step={1}
-                value={quantity}
-                onChange={(e) => {
-                  setQuantity(e.target.value)
-                  setTotalTouched(false)
-                }}
-                style={styles.input}
-                disabled={submitting || productId == null}
-              />
-            </div>
-            <div style={styles.fieldHalf}>
-              <label style={styles.label} htmlFor="sale-total">
-                Valor total (R$)
-              </label>
-              <input
-                id="sale-total"
-                type="number"
-                min={0}
-                step="0.01"
-                value={totalValue}
-                onChange={(e) => {
-                  setTotalValue(e.target.value)
-                  setTotalTouched(true)
-                }}
-                style={styles.input}
-                disabled={submitting || productId == null}
-              />
-            </div>
-          </div>
 
           <div style={styles.field}>
             <label style={styles.label} htmlFor="sale-note">
@@ -269,9 +440,13 @@ export function RegisterLocalSaleModal({
             <button
               type="submit"
               style={{ ...styles.submitBtn, ...(submitting ? styles.submitBtnDisabled : {}) }}
-              disabled={submitting || loadingProducts}
+              disabled={submitting || loadingProducts || cart.length === 0}
             >
-              {submitting ? 'Registrando…' : 'Confirmar venda'}
+              {submitting
+                ? 'Registrando…'
+                : cart.length > 1
+                  ? `Confirmar ${cart.length} itens`
+                  : 'Confirmar venda'}
             </button>
           </div>
         </form>
@@ -293,7 +468,7 @@ const styles = {
   },
   modal: {
     width: '100%',
-    maxWidth: '520px',
+    maxWidth: '560px',
     maxHeight: '90vh',
     overflowY: 'auto' as const,
     backgroundColor: '#ffffff',
@@ -345,16 +520,18 @@ const styles = {
   field: {
     marginBottom: '16px',
   },
-  fieldHalf: {
-    flex: 1,
-    minWidth: 0,
-  },
   label: {
     display: 'block',
     fontSize: '13px',
     fontWeight: 600,
     color: '#374151',
     marginBottom: '6px',
+  },
+  addRow: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '8px',
+    alignItems: 'flex-end',
   },
   searchWrap: {
     display: 'flex',
@@ -363,7 +540,6 @@ const styles = {
     padding: '0 12px',
     border: '1px solid #e5e7eb',
     borderRadius: '10px',
-    marginBottom: '8px',
   },
   searchInput: {
     flex: 1,
@@ -373,8 +549,29 @@ const styles = {
     fontFamily: 'inherit',
     fontSize: '14px',
   },
+  addQtyWrap: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '4px',
+    flexShrink: 0,
+  },
+  addQtyLabel: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#6b7280',
+  },
+  addQtyInput: {
+    width: '64px',
+    padding: '10px 8px',
+    borderRadius: '10px',
+    border: '1px solid #e5e7eb',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    textAlign: 'center' as const,
+    boxSizing: 'border-box' as const,
+  },
   productList: {
-    maxHeight: '200px',
+    maxHeight: '180px',
     overflowY: 'auto' as const,
     border: '1px solid #e5e7eb',
     borderRadius: '10px',
@@ -395,22 +592,21 @@ const styles = {
     border: 'none',
     borderBottom: '1px solid #f3f4f6',
     backgroundColor: '#ffffff',
-    cursor: 'pointer',
     textAlign: 'left' as const,
     fontFamily: 'inherit',
   },
-  productOptionSelected: {
-    backgroundColor: '#eff6ff',
+  productOptionInCart: {
+    backgroundColor: '#f9fafb',
   },
   productOptionDisabled: {
     opacity: 0.5,
-    cursor: 'default' as const,
   },
   productOptionText: {
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '2px',
     minWidth: 0,
+    flex: 1,
   },
   productName: {
     fontSize: '14px',
@@ -421,32 +617,146 @@ const styles = {
     fontSize: '12px',
     color: '#6b7280',
   },
-  selectedCard: {
+  addBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '6px 12px',
+    borderRadius: '8px',
+    border: '1px solid #bfdbfe',
+    backgroundColor: '#eff6ff',
+    color: '#1d4ed8',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  addBtnDisabled: {
+    opacity: 0.5,
+    cursor: 'default' as const,
+  },
+  cartHeader: {
     display: 'flex',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '6px',
+  },
+  cartCount: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#6b7280',
+  },
+  cartEmpty: {
+    padding: '20px 16px',
+    borderRadius: '10px',
+    border: '1px dashed #d1d5db',
+    fontSize: '13px',
+    color: '#6b7280',
+    textAlign: 'center' as const,
+    lineHeight: 1.4,
+  },
+  cartList: {
+    display: 'flex',
+    flexDirection: 'column' as const,
     gap: '10px',
+  },
+  cartItem: {
     padding: '12px 14px',
+    borderRadius: '10px',
+    border: '1px solid #e5e7eb',
+    backgroundColor: '#fafafa',
+  },
+  cartItemTop: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '10px',
+  },
+  cartItemInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  cartItemName: {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#111827',
+  },
+  cartItemMeta: {
+    display: 'block',
+    fontSize: '12px',
+    color: '#6b7280',
+    marginTop: '2px',
+  },
+  removeBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    border: '1px solid #fecaca',
+    backgroundColor: '#ffffff',
+    color: '#dc2626',
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  cartItemFields: {
+    display: 'flex',
+    gap: '10px',
+  },
+  cartField: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '4px',
+  },
+  cartFieldLabel: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#6b7280',
+  },
+  cartInput: {
+    width: '100%',
+    padding: '8px 10px',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    boxSizing: 'border-box' as const,
+    backgroundColor: '#ffffff',
+  },
+  suggestLink: {
+    marginTop: '6px',
+    padding: 0,
+    border: 'none',
+    background: 'none',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#2563eb',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  },
+  orderTotalRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '14px 16px',
+    marginBottom: '16px',
     borderRadius: '10px',
     backgroundColor: '#eff6ff',
     border: '1px solid #bfdbfe',
-    marginBottom: '16px',
   },
-  selectedName: {
-    display: 'block',
+  orderTotalLabel: {
     fontSize: '14px',
     fontWeight: 600,
     color: '#1e40af',
   },
-  selectedMeta: {
-    display: 'block',
-    fontSize: '12px',
-    color: '#3b82f6',
-    marginTop: '2px',
-  },
-  row: {
-    display: 'flex',
-    gap: '12px',
-    marginBottom: '16px',
+  orderTotalValue: {
+    fontSize: '18px',
+    fontWeight: 700,
+    color: '#1e3a8a',
   },
   input: {
     width: '100%',
