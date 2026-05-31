@@ -4,6 +4,7 @@ import { FaApple } from 'react-icons/fa'
 import { FiEye, FiEyeOff } from 'react-icons/fi'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useUserAuthNavigation } from '../../../contexts/UserAuthNavigationContext'
+import { throwApiError } from '../../../lib/apiError'
 import { apiFetch } from '../../../lib/apiFetch'
 
 export function UserLoginAccount() {
@@ -29,8 +30,7 @@ export function UserLoginAccount() {
         body: JSON.stringify({ email, password }),
       })
       if (!response.ok) {
-        const message = await response.text()
-        throw new Error(message || 'Email ou senha inválidos.')
+        await throwApiError(response, 'Email ou senha inválidos.')
       }
       await response.json()
       const sessionOk = await refreshSession()

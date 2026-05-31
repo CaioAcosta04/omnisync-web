@@ -1,3 +1,4 @@
+import { throwApiError } from '../lib/apiError'
 import { apiFetch } from '../lib/apiFetch'
 import type { MlCategoryRequirementsResponse } from '../types/mercadolivreCatalog'
 
@@ -15,10 +16,7 @@ export async function searchCategorySuggestions(
   const res = await apiFetch(
     `/api/integrations/mercadolivre/catalog/categories/suggestions?systemClientId=${systemClientId}&q=${encodeURIComponent(query)}`
   )
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || 'Erro ao buscar categorias.')
-  }
+  if (!res.ok) await throwApiError(res, 'Erro ao buscar categorias.')
   const data = (await res.json()) as { suggestions: MlCategorySuggestion[] }
   return data.suggestions ?? []
 }
@@ -30,9 +28,6 @@ export async function fetchCategoryRequirements(
   const res = await apiFetch(
     `/api/integrations/mercadolivre/catalog/categories/${encodeURIComponent(categoryId)}/requirements?systemClientId=${systemClientId}`
   )
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || 'Erro ao carregar campos da categoria.')
-  }
+  if (!res.ok) await throwApiError(res, 'Erro ao carregar campos da categoria.')
   return (await res.json()) as MlCategoryRequirementsResponse
 }

@@ -4,6 +4,7 @@ import { FaApple } from 'react-icons/fa'
 import { FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useUserAuthNavigation } from '../../../contexts/UserAuthNavigationContext'
+import { throwApiError } from '../../../lib/apiError'
 import { apiFetch } from '../../../lib/apiFetch'
 
 // ─── Shared field component ─────────────────────────────────────────────────
@@ -149,8 +150,7 @@ export function UserCreateAccount() {
         { method: 'GET', headers: { 'Content-Type': 'application/json' } }
       )
       if (!res.ok) {
-        const msg = await res.text()
-        throw new Error(msg || 'Não foi possível validar o CNPJ.')
+        await throwApiError(res, 'Não foi possível validar o CNPJ.')
       }
       const alreadyExists = (await res.json()) as boolean
       if (alreadyExists) {
@@ -178,7 +178,7 @@ export function UserCreateAccount() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: savedCompany.name, document: savedCompany.document }),
       })
-      if (!companyRes.ok) throw new Error((await companyRes.text()) || 'Não foi possível criar a empresa.')
+      if (!companyRes.ok) await throwApiError(companyRes, 'Não foi possível criar a empresa.')
       const companyResult = (await companyRes.json()) as { id?: number }
       const systemClientId = companyResult.id
       if (!systemClientId) throw new Error('Empresa criada sem retorno de ID.')
@@ -194,7 +194,7 @@ export function UserCreateAccount() {
           resource: { cpf: cpf.replace(/\D/g, '') },
         }),
       })
-      if (!registerRes.ok) throw new Error((await registerRes.text()) || 'Não foi possível criar o usuário.')
+      if (!registerRes.ok) await throwApiError(registerRes, 'Não foi possível criar o usuário.')
       await registerRes.json()
       const sessionOk = await refreshSession()
       if (!sessionOk) throw new Error('Conta criada, mas não foi possível iniciar a sessão. Faça login.')

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FiArrowLeft, FiCheckCircle } from 'react-icons/fi'
 import { useUserAuthNavigation } from '../../../contexts/UserAuthNavigationContext'
+import { throwApiError } from '../../../lib/apiError'
 import { apiFetch } from '../../../lib/apiFetch'
 
 export function UserChangePassword() {
@@ -23,8 +24,7 @@ export function UserChangePassword() {
         body: JSON.stringify({ email: email.trim() }),
       })
       if (!res.ok) {
-        const msg = await res.text()
-        throw new Error(msg || 'Não foi possível enviar o email.')
+        await throwApiError(res, 'Não foi possível enviar o email.')
       }
       setSent(true)
     } catch (err) {

@@ -1,3 +1,4 @@
+import { throwApiError } from '../lib/apiError'
 import { apiFetch } from '../lib/apiFetch'
 import type {
   MercadoLivreConnectUrlResponse,
@@ -12,10 +13,7 @@ import type {
  */
 export async function getMercadoLivreStatus(): Promise<MercadoLivreIntegrationStatusResponse> {
   const res = await apiFetch('/api/integrations/mercadolivre/status')
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || 'Não foi possível consultar o status da integração.')
-  }
+  if (!res.ok) await throwApiError(res, 'Não foi possível consultar o status da integração.')
   return (await res.json()) as MercadoLivreIntegrationStatusResponse
 }
 
@@ -25,10 +23,7 @@ export async function fetchMercadoLivreConnectUrl(
   const res = await apiFetch(
     `/api/integrations/mercadolivre/connect-url?systemClientId=${encodeURIComponent(String(systemClientId))}`
   )
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || 'Não foi possível obter o link do Mercado Livre.')
-  }
+  if (!res.ok) await throwApiError(res, 'Não foi possível obter o link do Mercado Livre.')
   return (await res.json()) as MercadoLivreConnectUrlResponse
 }
 
@@ -40,9 +35,6 @@ export async function exchangeMercadoLivreCode(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || 'Falha ao conectar a conta do Mercado Livre.')
-  }
+  if (!res.ok) await throwApiError(res, 'Falha ao conectar a conta do Mercado Livre.')
   return (await res.json()) as MercadoLivreIntegrationResponse
 }
