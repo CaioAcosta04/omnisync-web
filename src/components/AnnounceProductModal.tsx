@@ -11,7 +11,7 @@ import {
 } from '../lib/mlCategoryAttributes'
 import {
   createEmptyPicture,
-  pictureFromUrl,
+  picturesFromProductResource,
   toMercadoLivrePictures,
   validatePictures,
   type ProductPictureEntry,
@@ -35,22 +35,6 @@ type MlErrors = {
   pictures?: string
   attributes?: string
   attributeFields?: Record<string, string>
-}
-
-function picturesFromProduct(product: ProductDto): ProductPictureEntry[] {
-  const images = product.resource?.images
-  if (!Array.isArray(images)) return [createEmptyPicture()]
-
-  const entries: ProductPictureEntry[] = []
-  for (const img of images) {
-    if (img == null || typeof img !== 'object') continue
-    const url = (img as Record<string, unknown>).url
-    if (typeof url === 'string') {
-      const entry = pictureFromUrl(url)
-      if (entry) entries.push(entry)
-    }
-  }
-  return entries.length > 0 ? entries : [createEmptyPicture()]
 }
 
 function validateMl(
@@ -105,7 +89,7 @@ export function AnnounceProductModal({
     setMlSuggestions([])
     setMlSuggestionsOpen(false)
     setMlCategoryLoading(false)
-    setMlPictures(picturesFromProduct(product))
+    setMlPictures(picturesFromProductResource(product))
     setMlErrors({})
     setMlAttributeFields([])
     setMlAttributeValues({})

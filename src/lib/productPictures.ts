@@ -1,3 +1,5 @@
+import type { ProductDto } from '../types/product'
+
 const URL_REGEX = /^https?:\/\/.+/
 const MAX_PICTURES = 10
 const MAX_FILE_BYTES = 5 * 1024 * 1024
@@ -40,6 +42,78 @@ export function pictureFromUrl(url: string): ProductPictureEntry | null {
     previewUrl: trimmed,
     sourceUrl: trimmed,
   }
+}
+
+function pictureFromDataUri(dataUri: string, fileName?: string): ProductPictureEntry {
+  const trimmed = dataUri.trim()
+  const match = /^data:([^;]+);base64,/i.exec(trimmed)
+  const contentType = match?.[1] ?? 'image/jpeg'
+  return {
+    id: crypto.randomUUID(),
+    previewUrl: trimmed,
+    base64: trimmed,
+    contentType,
+    fileName: fileName ?? 'imagem-produto.jpg',
+  }
+}
+
+/** Converte imagem persistida em resource.images para entrada do editor de fotos. */
+export function pictureFromStoredImage(img: Record<string, unknown>): ProductPictureEntry | null {
+  const url = typeof img.url === 'string' ? img.url.trim() : ''
+  if (url) {
+    const fromHttp = pictureFromUrl(url)
+    if (fromHttp) return fromHttp
+    if (url.startsWith('data:')) {
+      const fileName =
+        typeof img.file_name === 'string'
+          ? img.file_name
+          : typeof img.fileName === 'string'
+            ? img.fileName
+            : undefined
+      return pictureFromDataUri(url, fileName)
+    }
+  }
+
+  const rawBase64 = typeof img.base64 === 'string' ? img.base64.trim() : ''
+  if (rawBase64) {
+    const contentType =
+      typeof img.content_type === 'string'
+        ? img.content_type
+        : typeof img.contentType === 'string'
+          ? img.contentType
+          : 'image/jpeg'
+    const previewUrl = rawBase64.startsWith('data:')
+      ? rawBase64
+      : `data:${contentType};base64,${rawBase64}`
+    return {
+      id: crypto.randomUUID(),
+      previewUrl,
+      base64: previewUrl,
+      contentType,
+      fileName:
+        typeof img.file_name === 'string'
+          ? img.file_name
+          : typeof img.fileName === 'string'
+            ? img.fileName
+            : 'imagem-produto.jpg',
+    }
+  }
+
+  return null
+}
+
+/** Imagens já cadastradas no produto, prontas para reutilizar no anúncio ML. */
+export function picturesFromProductResource(product: ProductDto): ProductPictureEntry[] {
+  const images = product.resource?.images
+  if (!Array.isArray(images)) return [createEmptyPicture()]
+
+  const entries: ProductPictureEntry[] = []
+  for (const img of images) {
+    if (img == null || typeof img !== 'object') continue
+    const entry = pictureFromStoredImage(img as Record<string, unknown>)
+    if (entry) entries.push(entry)
+  }
+  return entries.length > 0 ? entries : [createEmptyPicture()]
 }
 
 function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
