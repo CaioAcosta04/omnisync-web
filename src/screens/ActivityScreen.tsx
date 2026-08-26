@@ -470,18 +470,6 @@ export function ActivityScreen() {
               </button>
             ))}
           </div>
-
-          <button type="button" style={styles.dropdownBtn}>
-            <FiTrendingUp size={14} color="#6b7280" />
-            Marketplace: Todos
-            <FiChevronDown size={14} color="#6b7280" />
-          </button>
-
-          <button type="button" style={styles.dropdownBtn}>
-            <FiShoppingCart size={14} color="#6b7280" />
-            Produto: Todos
-            <FiChevronDown size={14} color="#6b7280" />
-          </button>
         </div>
 
         {/* Loading */}
@@ -594,43 +582,6 @@ export function ActivityScreen() {
               />
             ))}
           </div>
-        </div>
-
-        {/* Health Status */}
-        <div style={styles.statCard}>
-          <span style={styles.statLabel}>Status de saúde</span>
-          <div style={styles.healthList}>
-            {HEALTH_ITEMS.map((item) => (
-              <div key={item.name} style={styles.healthRow}>
-                <div style={styles.healthLeft}>
-                  <span
-                    style={{
-                      ...styles.healthSquare,
-                      backgroundColor: item.color,
-                    }}
-                  />
-                  <span style={styles.healthName}>{item.name}</span>
-                </div>
-                <span
-                  style={{
-                    ...styles.healthDot,
-                    backgroundColor: item.status,
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Quick Links */}
-        <h3 style={{ ...styles.sidebarSectionTitle, marginTop: '24px' }}>ATALHOS</h3>
-        <div style={styles.quickLinks}>
-          {['Registros de auditoria', 'Configurações de sync'].map((link) => (
-            <button key={link} type="button" style={styles.quickLinkBtn}>
-              <span>{link}</span>
-              <FiChevronRight size={16} color="#9ca3af" />
-            </button>
-          ))}
         </div>
       </aside>
     </div>
@@ -1098,62 +1049,5 @@ const styles = {
     flex: 1,
     borderRadius: '3px',
     minWidth: '12px',
-  },
-
-  /* Health */
-  healthList: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '10px',
-    marginTop: '4px',
-  },
-  healthRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  healthLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
-  healthSquare: {
-    width: '16px',
-    height: '16px',
-    borderRadius: '4px',
-  },
-  healthName: {
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#374151',
-  },
-  healthDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-  },
-
-  /* Quick links */
-  quickLinks: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    backgroundColor: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '12px',
-    overflow: 'hidden',
-  },
-  quickLinkBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '14px 16px',
-    border: 'none',
-    borderBottom: '1px solid #f3f4f6',
-    backgroundColor: 'transparent',
-    fontFamily: 'inherit',
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#374151',
-    cursor: 'pointer',
   },
 } as const
