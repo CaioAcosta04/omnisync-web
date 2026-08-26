@@ -25,7 +25,6 @@ export function MercadoLivreDebugPanel() {
   const ml = useMercadoLivreOAuth()
   const [open, setOpen] = useState(true)
   const [, force] = useState(0)
-  const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
     return subscribeMlEvents(() => force((n) => n + 1))
@@ -33,7 +32,8 @@ export function MercadoLivreDebugPanel() {
 
   useEffect(() => {
     // Re-render leve a cada 1s pra atualizar a leitura da URL (caso o context limpe code/state)
-    const id = setInterval(() => setNow(Date.now()), 1000)
+    // cursor mudou o jeito de calcular esse 1 segundo, se quebrar é aqui que arruma
+    const id = setInterval(() => force((n) => n + 1), 1000)
     return () => clearInterval(id)
   }, [])
 
@@ -58,7 +58,7 @@ export function MercadoLivreDebugPanel() {
   }
 
   return (
-    <div style={styles.panel} data-now={now}>
+    <div style={styles.panel}>
       <header style={styles.header}>
         <span style={styles.headerTitle}>ML OAuth Debug</span>
         <div style={styles.headerActions}>

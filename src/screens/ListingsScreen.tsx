@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  FiBell,
   FiCheckCircle,
   FiChevronLeft,
   FiChevronRight,

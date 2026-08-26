@@ -4,7 +4,6 @@ import {
   FiAlertTriangle,
   FiCheckCircle,
   FiChevronDown,
-  FiChevronRight,
   FiClipboard,
   FiCornerUpLeft,
   FiDownload,
@@ -12,7 +11,6 @@ import {
   FiRefreshCw,
   FiSearch,
   FiShoppingCart,
-  FiTrendingUp,
 } from 'react-icons/fi'
 import { ActivityEmptyState } from '../components/ActivityEmptyState'
 import { useAppNavigation } from '../contexts/AppNavigationContext'
@@ -65,12 +63,6 @@ const EVENT_ICONS: Record<EventType, React.ReactNode> = {
   return: <FiCornerUpLeft size={20} />,
   bulk_update: <FiClipboard size={20} />,
 }
-
-const HEALTH_ITEMS = [
-  { name: 'Amazon', color: '#f59e0b', status: '#22c55e' },
-  { name: 'Shopify', color: '#22c55e', status: '#22c55e' },
-  { name: 'eBay', color: '#a3e635', status: '#f59e0b' },
-]
 
 const CHANNEL_DISPLAY: Record<SaleChannel, { label: string; letter: string; color: string }> = {
   MERCADO_LIVRE: { label: 'Mercado Livre', letter: 'M', color: '#ffe600' },

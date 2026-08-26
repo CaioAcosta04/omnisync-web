@@ -100,48 +100,43 @@ export function MarketplacesScreen() {
     setStored(readMercadoLivreIntegration())
   }, [])
 
-  const fetchAndStoreStatus = useCallback(async () => {
-    logMlEvent({ category: 'api', level: 'info', message: 'GET /status iniciado' })
-    try {
-      const status = await getMercadoLivreStatus()
-      logMlEvent({
-        category: 'api',
-        level: status.connected ? 'success' : 'info',
-        message: `GET /status OK (connected=${status.connected})`,
-        data: {
-          connected: status.connected,
-          active: status.active,
-          systemClientId: status.systemClientId,
-          expiresAt: status.expiresAt,
-        },
-      })
-      writeMercadoLivreIntegrationFromStatus(status)
-      reloadStored()
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'erro desconhecido'
-      logMlEvent({
-        category: 'api',
-        level: 'error',
-        message: 'GET /status FAIL',
-        data: { error: msg },
-      })
-      // falha silenciosa para a UI — o cache existente (localStorage) é mantido
-    }
-  }, [reloadStored])
-
-  // Busca o status real no backend quando a tela monta (com usuário autenticado)
+  // Busca o status real no backend quando monta ou após fluxo OAuth
   useEffect(() => {
-    if (user != null) {
-      void fetchAndStoreStatus()
+    let active = true
+    if (user != null || mlStatus === 'success') {
+      logMlEvent({ category: 'api', level: 'info', message: 'GET /status iniciado' })
+      getMercadoLivreStatus()
+        .then((status) => {
+          if (!active) return
+          logMlEvent({
+            category: 'api',
+            level: status.connected ? 'success' : 'info',
+            message: `GET /status OK (connected=${status.connected})`,
+            data: {
+              connected: status.connected,
+              active: status.active,
+              systemClientId: status.systemClientId,
+              expiresAt: status.expiresAt,
+            },
+          })
+          writeMercadoLivreIntegrationFromStatus(status)
+          setStored(readMercadoLivreIntegration())
+        })
+        .catch((e) => {
+          if (!active) return
+          const msg = e instanceof Error ? e.message : 'erro desconhecido'
+          logMlEvent({
+            category: 'api',
+            level: 'error',
+            message: 'GET /status FAIL',
+            data: { error: msg },
+          })
+        })
     }
-  }, [user, fetchAndStoreStatus])
-
-  // Re-busca após concluir o fluxo OAuth
-  useEffect(() => {
-    if (mlStatus === 'success') {
-      void fetchAndStoreStatus()
+    return () => {
+      active = false
     }
-  }, [mlStatus, fetchAndStoreStatus])
+  }, [user, mlStatus])
 
   const systemClientId = user?.systemClientId
   const connected =

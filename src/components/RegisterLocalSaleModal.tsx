@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { FiPlus, FiSearch, FiTrash2, FiX } from 'react-icons/fi'
 import { ProductImageThumb } from './ProductImageThumb'
 import { getProductImageUrl } from '../lib/productImage'
@@ -42,8 +42,12 @@ function suggestedLineTotal(product: ProductDto, quantity: number): number {
   return product.price * quantity
 }
 
-export function RegisterLocalSaleModal({
-  open,
+export function RegisterLocalSaleModal(props: RegisterLocalSaleModalProps) {
+  if (!props.open) return null
+  return <RegisterLocalSaleModalContent {...props} />
+}
+
+function RegisterLocalSaleModalContent({
   products,
   loadingProducts = false,
   submitting = false,
@@ -63,15 +67,6 @@ export function RegisterLocalSaleModal({
     return map
   }, [products])
 
-  useEffect(() => {
-    if (!open) return
-    setSearch('')
-    setAddQuantity('1')
-    setCart([])
-    setNote('')
-    setFormError(null)
-  }, [open])
-
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return products
@@ -88,8 +83,6 @@ export function RegisterLocalSaleModal({
       return sum + (Number.isNaN(total) ? 0 : total)
     }, 0)
   }, [cart])
-
-  if (!open) return null
 
   const addToCart = (product: ProductDto) => {
     setFormError(null)
