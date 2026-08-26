@@ -23,28 +23,6 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'appearance', label: 'Aparência', icon: <FiMonitor size={18} /> },
 ]
 
-/* ─── Toggle Switch ─── */
-
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      style={{
-        ...s.toggle,
-        backgroundColor: checked ? '#6d28d9' : '#d1d5db',
-      }}
-    >
-      <span
-        style={{
-          ...s.toggleKnob,
-          transform: checked ? 'translateX(18px)' : 'translateX(2px)',
-        }}
-      />
-    </button>
-  )
-}
-
 /* ─── Profile Section ─── */
 
 function ProfileSection() {
