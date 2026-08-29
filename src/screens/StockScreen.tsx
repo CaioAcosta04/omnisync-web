@@ -16,6 +16,7 @@ import { ProductDetailDialog } from '../components/ProductDetailDialog'
 import { ProductImageThumb } from '../components/ProductImageThumb'
 import { StockEmptyState } from '../components/StockEmptyState'
 import { useAuth } from '../contexts/AuthContext'
+import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
 import { getProductImageUrl } from '../lib/productImage'
 import { formatRelative } from '../lib/relativeTime'
@@ -78,6 +79,7 @@ function toTableRow(p: ProductDto): TableRow {
 
 export function StockScreen() {
   const { user } = useAuth()
+  const { catalogRevision } = useMercadoLivreSync()
   const systemClientId = user?.systemClientId ?? null
 
   const [products, setProducts] = useState<ProductDto[]>([])
@@ -114,8 +116,10 @@ export function StockScreen() {
   }, [systemClientId])
 
   useEffect(() => {
+    // A revisão é um sinal de invalidação, não um parâmetro da API.
+    void catalogRevision
     void fetchProducts()
-  }, [fetchProducts])
+  }, [catalogRevision, fetchProducts])
 
   const handleAddProduct = useCallback(async (data: NewProductData) => {
     if (systemClientId == null) return
