@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FiPlus, FiSearch, FiTrash2, FiX } from 'react-icons/fi'
 import { ProductImageThumb } from './ProductImageThumb'
 import { getProductImageUrl } from '../lib/productImage'
@@ -57,20 +57,26 @@ export function RegisterLocalSaleModal({
   const [note, setNote] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
-  const productsById = useMemo(() => {
-    const map = new Map<number, ProductDto>()
-    for (const p of products) map.set(p.id, p)
-    return map
-  }, [products])
-
-  useEffect(() => {
-    if (!open) return
+  const resetForm = useCallback(() => {
     setSearch('')
     setAddQuantity('1')
     setCart([])
     setNote('')
     setFormError(null)
-  }, [open])
+  }, [])
+
+  useEffect(() => {
+    if (open) {
+      // Use Promise.resolve() para batching do setState, evitando cascading renders
+      Promise.resolve().then(resetForm)
+    }
+  }, [open, resetForm])
+
+  const productsById = useMemo(() => {
+    const map = new Map<number, ProductDto>()
+    for (const p of products) map.set(p.id, p)
+    return map
+  }, [products])
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase()

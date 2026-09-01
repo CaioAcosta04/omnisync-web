@@ -10,6 +10,7 @@ import {
 import { apiFetch } from '../lib/apiFetch'
 import { clearMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
 import type { UserMe } from '../types/auth'
+import type { Permission } from '../types/user'
 
 const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
 
@@ -21,6 +22,17 @@ const DEV_USER: UserMe = {
   resource: {},
   active: true,
   createdAt: '',
+  role: 'ADMIN',
+  permissions: [
+    'PRODUCT_READ',
+    'PRODUCT_WRITE',
+    'LISTING_PUBLISH',
+    'SALE_READ',
+    'SALE_WRITE',
+    'USER_MANAGE',
+    'INTEGRATION_MANAGE',
+    'SETTINGS_MANAGE',
+  ],
 }
 
 type AuthStatus = 'loading' | 'ready'
@@ -34,6 +46,8 @@ type AuthContextValue = {
   refreshSession: () => Promise<boolean>
   /** Encerra sessão no servidor e limpa o usuário local. */
   logout: () => Promise<void>
+  /** Verifica se o usuário autenticado possui a permissão requerida. */
+  hasPermission: (permission: Permission | string) => boolean
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -74,6 +88,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const hasPermission = useCallback((permission: Permission | string): boolean => {
+    if (!user) return false
+    
+    // Tenta permissões diretas no user
+    const directPermissions = Array.isArray(user.permissions) ? user.permissions : []
+    if (directPermissions.includes(permission as string)) return true
+    
+    // Tenta permissões no user.resource
+    const resourcePermissions = Array.isArray(user.resource?.permissions)
+      ? (user.resource.permissions as string[])
+      : []
+    if (resourcePermissions.includes(permission as string)) return true
+    
+    return false
+  }, [user])
+
   useEffect(() => {
     if (SKIP_AUTH) {
       return
@@ -97,8 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       skipAuth: SKIP_AUTH,
       refreshSession,
       logout,
+      hasPermission,
     }),
-    [user, status, refreshSession, logout]
+    [user, status, refreshSession, logout, hasPermission]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

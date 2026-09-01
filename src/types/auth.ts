@@ -13,4 +13,6 @@ export type UserMe = {
   resource: Record<string, unknown>
   active: boolean
   createdAt: string
+  role?: string
+  permissions?: string[]
 }

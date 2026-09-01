@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { FiCheck, FiShield, FiUser, FiX } from 'react-icons/fi'
+import type { UserRole } from '../lib/userResource'
 
-type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
 type UserStatus = 'active' | 'inactive'
 
 export type ManagedUser = {
   id: string
   name: string
   email: string
-  role: UserRole
+  role: UserRole | string
   status: UserStatus
   permissions: string[]
   avatar: string
@@ -22,14 +22,19 @@ type ManageUserModalProps = {
   error?: string | null
 }
 
-const ROLES: { id: UserRole; label: string; description: string }[] = [
-  { id: 'admin', label: 'Administrador', description: 'Acesso total à plataforma, incluindo faturamento e usuários' },
-  { id: 'manager', label: 'Gerente', description: 'Gerencia estoque, anúncios, vendas e marketplaces' },
-  { id: 'editor', label: 'Editor', description: 'Cria e edita anúncios e entradas de estoque' },
-  { id: 'viewer', label: 'Visualizador', description: 'Acesso somente leitura a todos os dados' },
+// Mapeamento de roles para exibição
+const ROLES: { id: string; label: string; description: string }[] = [
+  { id: 'ADMIN', label: 'Administrador', description: 'Acesso total à plataforma, incluindo faturamento e usuários' },
+  { id: 'MANAGER', label: 'Gerente', description: 'Gerencia estoque, anúncios, vendas e marketplaces' },
+  { id: 'SELLER', label: 'Vendedor', description: 'Cria e edita anúncios e entradas de estoque' },
+  { id: 'VIEWER', label: 'Visualizador', description: 'Acesso somente leitura a todos os dados' },
 ]
 
-const ROLE_COLORS: Record<UserRole, { bg: string; color: string; border: string }> = {
+const ROLE_COLORS: Record<string, { bg: string; color: string; border: string }> = {
+  ADMIN: { bg: '#ede9fe', color: '#6d28d9', border: '#c4b5fd' },
+  MANAGER: { bg: '#dbeafe', color: '#2563eb', border: '#93c5fd' },
+  SELLER: { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
+  VIEWER: { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' },
   admin: { bg: '#ede9fe', color: '#6d28d9', border: '#c4b5fd' },
   manager: { bg: '#dbeafe', color: '#2563eb', border: '#93c5fd' },
   editor: { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
@@ -90,7 +95,7 @@ function ManageUserModalForm({
   submitting: boolean
   error: string | null
 }) {
-  const [role, setRole] = useState<UserRole>(user.role)
+  const [role, setRole] = useState<string>(user.role as string)
   const [status, setStatus] = useState<UserStatus>(user.status)
   const [permissions, setPermissions] = useState<string[]>([...user.permissions])
 

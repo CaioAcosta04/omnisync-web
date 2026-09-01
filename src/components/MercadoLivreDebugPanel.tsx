@@ -25,7 +25,7 @@ export function MercadoLivreDebugPanel() {
   const ml = useMercadoLivreOAuth()
   const [open, setOpen] = useState(true)
   const [, force] = useState(0)
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     return subscribeMlEvents(() => force((n) => n + 1))

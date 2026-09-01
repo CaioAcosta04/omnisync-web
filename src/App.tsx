@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+
+// NOTE: 'Permission' is not exported by './types/user' in this project. This app uses
+// the permission union from the role/permissions types instead.
 import {
   FiActivity,
   FiArchive,
@@ -38,6 +41,8 @@ import { UserChangePassword } from './screens/user/userChangePassword/UserChange
 import { MercadoLivreOAuthModal } from './components/MercadoLivreOAuthModal'
 import { MercadoLivreDebugPanel } from './components/MercadoLivreDebugPanel'
 import { MercadoLivreSyncStatusBar } from './components/MercadoLivreSyncStatusBar'
+import { ToastContainer } from './components/ToastContainer'
+import type { Permission } from './types/user'
 
 const ML_DEBUG_ENABLED =
   import.meta.env.DEV ||
@@ -55,24 +60,56 @@ const AUTH_SCREENS: Record<UserAuthScreenLabel, ComponentType> = {
   ChangePassword: UserChangePassword,
 }
 
+type NavItemConfig = {
+  label: string
+  icon: React.ReactNode
+  Screen: ComponentType
+  requiredPermission?: Permission | Permission[]
+}
+
 export function AppShell() {
   const mainScrollRef = useRef<HTMLElement | null>(null)
-  const { user, status, skipAuth, logout: authLogout } = useAuth()
+  const { user, status, skipAuth, hasPermission, logout: authLogout } = useAuth()
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
-  const sidebarItems = useMemo(
+
+  const allSidebarItems = useMemo<NavItemConfig[]>(
     () => [
       { label: 'Painel', icon: <FiLayers size={20} />, Screen: DashboardScreen },
-      { label: 'Estoque', icon: <FiArchive size={20} />, Screen: StockScreen },
-      { label: 'Vendas', icon: <FiShoppingBag size={20} />, Screen: OrdersScreen },
-      { label: 'Marketplaces', icon: <FiGlobe size={20} />, Screen: MarketplacesScreen },
-      { label: 'Atividade', icon: <FiActivity size={20} />, Screen: ActivityScreen },
-      { label: 'Anúncios', icon: <FiList size={20} />, Screen: ListingsScreen },
-      { label: 'Usuários', icon: <FiUsers size={20} />, Screen: UsersScreen },
+      { label: 'Estoque', icon: <FiArchive size={20} />, Screen: StockScreen, requiredPermission: 'PRODUCT_READ' },
+      { label: 'Vendas', icon: <FiShoppingBag size={20} />, Screen: OrdersScreen, requiredPermission: 'SALE_READ' },
+      { label: 'Marketplaces', icon: <FiGlobe size={20} />, Screen: MarketplacesScreen, requiredPermission: 'INTEGRATION_MANAGE' },
+      { label: 'Atividade', icon: <FiActivity size={20} />, Screen: ActivityScreen, requiredPermission: ['PRODUCT_READ', 'SALE_READ'] },
+      { label: 'Anúncios', icon: <FiList size={20} />, Screen: ListingsScreen, requiredPermission: 'PRODUCT_READ' },
+      { label: 'Usuários', icon: <FiUsers size={20} />, Screen: UsersScreen, requiredPermission: 'USER_MANAGE' },
       { label: 'Configurações', icon: <FiSettings size={20} />, Screen: SettingsScreen },
     ],
     []
   )
-  const [activeLabel, setActiveLabel] = useState(sidebarItems[0]?.label ?? 'Painel')
+
+  const sidebarItems = useMemo(() => {
+    return allSidebarItems.filter((item) => {
+      if (!item.requiredPermission) return true
+      if (Array.isArray(item.requiredPermission)) {
+        return item.requiredPermission.some((p) => hasPermission(p))
+      }
+      return hasPermission(item.requiredPermission)
+    })
+  }, [allSidebarItems, hasPermission])
+
+  const [userSelectedLabel, setUserSelectedLabel] = useState<string | null>(null)
+
+  const activeLabel = useMemo(() => {
+    if (userSelectedLabel && sidebarItems.some((item) => item.label === userSelectedLabel)) {
+      return userSelectedLabel
+    }
+    return sidebarItems[0]?.label ?? 'Painel'
+  }, [sidebarItems, userSelectedLabel])
+
+  const setActiveLabel = useCallback(
+    (label: string) => setUserSelectedLabel(label),
+    []
+  )
+
   const activeItem =
     sidebarItems.find((item) => item.label === activeLabel) ?? sidebarItems[0]
 
@@ -142,6 +179,7 @@ function App() {
           <AppShell />
           <MercadoLivreOAuthModal />
           {ML_DEBUG_ENABLED && <MercadoLivreDebugPanel />}
+          <ToastContainer />
         </MercadoLivreSyncProvider>
       </MercadoLivreOAuthProvider>
     </AuthProvider>

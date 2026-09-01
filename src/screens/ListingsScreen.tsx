@@ -94,10 +94,11 @@ function toMlListing(p: ProductDto): MlListing | null {
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export function ListingsScreen() {
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
   const { catalogRevision, isSyncing, lastResult, warning, syncNow } =
     useMercadoLivreSync()
   const systemClientId = user?.systemClientId ?? null
+  const canPublishListing = hasPermission('LISTING_PUBLISH')
 
   const mlIntegration = readMercadoLivreIntegration()
   const mlConnected =
@@ -309,23 +310,25 @@ export function ListingsScreen() {
           <button type="button" style={styles.bellBtn} aria-label="Notificações">
             <FiBell size={20} color="#6b7280" />
           </button>
-          <button
-            type="button"
-            style={{
-              ...styles.announceBtn,
-              ...(!mlConnected ? styles.syncBtnDisabled : {}),
-            }}
-            onClick={() => setShowSelectProductModal(true)}
-            disabled={!mlConnected}
-            title={
-              !mlConnected
-                ? 'Conecte o Mercado Livre para anunciar'
-                : 'Anunciar produto da loja no Mercado Livre'
-            }
-          >
-            <FiPlus size={16} />
-            Anunciar produto
-          </button>
+          {canPublishListing && (
+            <button
+              type="button"
+              style={{
+                ...styles.announceBtn,
+                ...(!mlConnected ? styles.syncBtnDisabled : {}),
+              }}
+              onClick={() => setShowSelectProductModal(true)}
+              disabled={!mlConnected}
+              title={
+                !mlConnected
+                  ? 'Conecte o Mercado Livre para anunciar'
+                  : 'Anunciar produto da loja no Mercado Livre'
+              }
+            >
+              <FiPlus size={16} />
+              Anunciar produto
+            </button>
+          )}
           <button
             type="button"
             style={{
@@ -456,7 +459,7 @@ export function ListingsScreen() {
                   : 'Clique em "Sincronizar ML" para importar seus anúncios do Mercado Livre.'}
               </p>
               <div style={styles.emptyActions}>
-                {unannouncedProducts.length > 0 && (
+                {canPublishListing && unannouncedProducts.length > 0 && (
                   <button
                     type="button"
                     style={styles.announceCtaBtn}

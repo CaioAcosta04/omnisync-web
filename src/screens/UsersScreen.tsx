@@ -17,12 +17,11 @@ import { ManageUserModal, type ManagedUser } from '../components/ManageUserModal
 import { useAuth } from '../contexts/AuthContext'
 import { formatRelative } from '../lib/relativeTime'
 import {
-  buildUserResource,
   formatPermissionLabel,
   initialsFromName,
-  parseUserPermissions,
-  parseUserRole,
+  normalizeRole,
   type UserRole,
+  type Permission,
 } from '../lib/userResource'
 import {
   listUsers,
@@ -41,16 +40,16 @@ type PlatformUser = {
   role: UserRole
   status: UserStatus
   lastActive: string
-  permissions: string[]
+  permissions: Permission[]
   avatar: string
-  resource: Record<string, unknown> | null
+  resource?: Record<string, unknown> | null
 }
 
 const ROLE_CONFIG: Record<UserRole, { label: string; bg: string; color: string }> = {
-  admin: { label: 'Administrador', bg: '#ede9fe', color: '#6d28d9' },
-  manager: { label: 'Gerente', bg: '#dbeafe', color: '#2563eb' },
-  editor: { label: 'Editor', bg: '#fef3c7', color: '#92400e' },
-  viewer: { label: 'Visualizador', bg: '#f3f4f6', color: '#374151' },
+  ADMIN: { label: 'Administrador', bg: '#ede9fe', color: '#6d28d9' },
+  MANAGER: { label: 'Gerente', bg: '#dbeafe', color: '#2563eb' },
+  SELLER: { label: 'Vendedor', bg: '#fef3c7', color: '#92400e' },
+  VIEWER: { label: 'Visualizador', bg: '#f3f4f6', color: '#374151' },
 }
 
 const STATUS_CONFIG: Record<UserStatus, { label: string; color: string }> = {
@@ -63,7 +62,13 @@ const AVATAR_COLORS = ['#6d28d9', '#2563eb', '#0891b2', '#059669', '#d97706', '#
 const ITEMS_PER_PAGE = 5
 
 function toPlatformUser(dto: UserDto): PlatformUser {
-  const role = parseUserRole(dto.resource)
+  const role = normalizeRole(dto.role ?? (dto.resource?.role as string))
+  const rawPermissions = Array.isArray(dto.permissions)
+    ? dto.permissions
+    : Array.isArray(dto.resource?.permissions)
+      ? dto.resource.permissions
+      : []
+
   return {
     id: String(dto.id),
     name: dto.name,
@@ -71,15 +76,16 @@ function toPlatformUser(dto: UserDto): PlatformUser {
     role,
     status: dto.active ? 'active' : 'inactive',
     lastActive: formatRelative(dto.createdAt),
-    permissions: parseUserPermissions(dto.resource, role),
-    avatar: initialsFromName(dto.name),
+    permissions: rawPermissions as Permission[],
+    avatar: initialsFromName(dto.name) || '?',
     resource: dto.resource,
   }
 }
 
 export function UsersScreen() {
-  const { user: authUser } = useAuth()
+  const { user: authUser, hasPermission } = useAuth()
   const systemClientId = authUser?.systemClientId ?? null
+  const canManageUsers = hasPermission('USER_MANAGE')
 
   const [users, setUsers] = useState<PlatformUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,8 +130,10 @@ export function UsersScreen() {
       setSaveSubmitting(true)
       setSaveError(null)
       try {
-        const resource = buildUserResource(existing.resource, updated.role, updated.permissions)
-        await updateUser(Number(updated.id), { resource })
+        await updateUser(Number(updated.id), {
+          role: updated.role,
+          permissions: updated.permissions,
+        })
         if ((updated.status === 'active') !== (existing.status === 'active')) {
           await updateUserStatus(Number(updated.id), updated.status === 'active')
         }
@@ -151,7 +159,8 @@ export function UsersScreen() {
           name: data.name.trim(),
           email: data.email.trim(),
           password: data.password,
-          resource: buildUserResource(null, data.role, data.permissions),
+          role: data.role,
+          permissions: data.permissions,
         })
         setShowCreateModal(false)
         setCreateError(null)
@@ -218,7 +227,7 @@ export function UsersScreen() {
   const stats = useMemo(() => {
     const total = users.length
     const active = users.filter((u) => u.status === 'active').length
-    const admins = users.filter((u) => u.role === 'admin').length
+    const admins = users.filter((u) => u.role === 'ADMIN').length
     const inactive = users.filter((u) => u.status === 'inactive').length
     return { total, active, admins, inactive }
   }, [users])
@@ -286,10 +295,12 @@ export function UsersScreen() {
           <button type="button" style={styles.bellBtn} aria-label="Notificações">
             <FiBell size={20} color="#6b7280" />
           </button>
-          <button type="button" style={styles.createUserBtn} onClick={() => setShowCreateModal(true)}>
-            <FiUserPlus size={16} />
-            Criar usuário
-          </button>
+          {canManageUsers && (
+            <button type="button" style={styles.createUserBtn} onClick={() => setShowCreateModal(true)}>
+              <FiUserPlus size={16} />
+              Criar usuário
+            </button>
+          )}
         </div>
       </div>
 
@@ -354,7 +365,7 @@ export function UsersScreen() {
 
       {/* Role filter tabs */}
       <div style={styles.filters}>
-        {(['all', 'admin', 'manager', 'editor', 'viewer'] as const).map((role) => (
+        {(['all', 'ADMIN', 'MANAGER', 'SELLER', 'VIEWER'] as const).map((role) => (
           <button
             key={role}
             type="button"
@@ -378,21 +389,21 @@ export function UsersScreen() {
               <th style={styles.th}>FUNÇÃO</th>
               <th style={styles.th}>PERMISSÕES</th>
               <th style={styles.th}>STATUS</th>
-              <th style={styles.th}>ÚLTIMO ACESSO</th>
-              <th style={{ ...styles.th, ...styles.thLast }}>AÇÕES</th>
+              <th style={{ ...styles.th, ...(!canManageUsers ? styles.thLast : {}) }}>ÚLTIMO ACESSO</th>
+              {canManageUsers && <th style={{ ...styles.th, ...styles.thLast }}>AÇÕES</th>}
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} style={styles.emptyCell}>
+                <td colSpan={canManageUsers ? 6 : 5} style={styles.emptyCell}>
                   Carregando usuários…
                 </td>
               </tr>
             )}
             {!loading && paginatedUsers.length === 0 && (
               <tr>
-                <td colSpan={6} style={styles.emptyCell}>
+                <td colSpan={canManageUsers ? 6 : 5} style={styles.emptyCell}>
                   Nenhum usuário encontrado.
                 </td>
               </tr>
@@ -442,58 +453,74 @@ export function UsersScreen() {
                       <span style={styles.statusLabel}>{statusCfg.label}</span>
                     </div>
                   </td>
-                  <td style={styles.td}>
+                  <td style={{ ...styles.td, ...(!canManageUsers ? styles.tdLast : {}) }}>
                     <span style={styles.lastActiveText}>{user.lastActive}</span>
                   </td>
-                  <td style={{ ...styles.td, ...styles.tdLast }}>
-                    <div style={styles.actionsCell}>
-                      <button
-                        type="button"
-                        style={styles.manageBtn}
-                        onClick={() => setManagingUser(user)}
-                      >
-                        <FiEdit2 size={14} />
-                        Gerenciar
-                      </button>
-                      <div style={{ position: 'relative' }}>
+                  {canManageUsers && (
+                    <td style={{ ...styles.td, ...styles.tdLast }}>
+                      <div style={styles.actionsCell}>
                         <button
                           type="button"
-                          style={styles.moreBtn}
-                          aria-label="Mais ações"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setOpenMenuId(openMenuId === user.id ? null : user.id)
+                          style={{
+                            ...styles.manageBtn,
+                            ...(user.id === String(authUser?.id) ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
                           }}
+                          disabled={user.id === String(authUser?.id)}
+                          onClick={() => setManagingUser(user)}
+                          title={user.id === String(authUser?.id) ? 'Você não pode gerenciar sua própria conta aqui' : 'Gerenciar usuário'}
                         >
-                          <FiMoreVertical size={16} />
+                          <FiEdit2 size={14} />
+                          Gerenciar
                         </button>
-                        {openMenuId === user.id && (
-                          <div style={styles.dropdown}>
-                            <button
-                              type="button"
-                              style={styles.dropdownItem}
-                              onClick={() => {
-                                setOpenMenuId(null)
-                                setManagingUser(user)
-                              }}
-                            >
-                              <FiShield size={14} />
-                              Alterar função
-                            </button>
-                            <button
-                              type="button"
-                              style={{ ...styles.dropdownItem, color: '#dc2626' }}
-                              disabled={user.status === 'inactive'}
-                              onClick={() => void handleDeactivateUser(user.id)}
-                            >
-                              <FiTrash2 size={14} />
-                              Desativar usuário
-                            </button>
-                          </div>
-                        )}
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            style={{
+                              ...styles.moreBtn,
+                              ...(user.id === String(authUser?.id) ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+                            }}
+                            disabled={user.id === String(authUser?.id)}
+                            aria-label="Mais ações"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setOpenMenuId(openMenuId === user.id ? null : user.id)
+                            }}
+                          >
+                            <FiMoreVertical size={16} />
+                          </button>
+                          {openMenuId === user.id && (
+                            <div style={styles.dropdown}>
+                              <button
+                                type="button"
+                                style={styles.dropdownItem}
+                                onClick={() => {
+                                  setOpenMenuId(null)
+                                  setManagingUser(user)
+                                }}
+                              >
+                                <FiShield size={14} />
+                                Alterar função
+                              </button>
+                              <button
+                                type="button"
+                                style={{
+                                  ...styles.dropdownItem,
+                                  color: '#dc2626',
+                                  ...(user.status === 'inactive' || user.id === String(authUser?.id) ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+                                }}
+                                disabled={user.status === 'inactive' || user.id === String(authUser?.id)}
+                                title={user.id === String(authUser?.id) ? 'Você não pode desativar sua própria conta' : ''}
+                                onClick={() => void handleDeactivateUser(user.id)}
+                              >
+                                <FiTrash2 size={14} />
+                                Desativar usuário
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
+                    </td>
+                  )}
                 </tr>
               )
             })}

@@ -131,15 +131,39 @@ export function MarketplacesScreen() {
 
   // Busca o status real no backend quando a tela monta (com usuário autenticado)
   useEffect(() => {
-    if (user != null) {
-      void fetchAndStoreStatus()
+    let cancelled = false
+
+    const effect = async () => {
+      if (user != null) {
+        await fetchAndStoreStatus()
+        if (cancelled) return
+        // Estado foi atualizado via reloadStored() dentro de fetchAndStoreStatus
+      }
+    }
+
+    void effect()
+
+    return () => {
+      cancelled = true
     }
   }, [user, fetchAndStoreStatus])
 
   // Re-busca após concluir o fluxo OAuth
   useEffect(() => {
-    if (mlStatus === 'success') {
-      void fetchAndStoreStatus()
+    let cancelled = false
+
+    const effect = async () => {
+      if (mlStatus === 'success') {
+        await fetchAndStoreStatus()
+        if (cancelled) return
+        // Estado foi atualizado via reloadStored() dentro de fetchAndStoreStatus
+      }
+    }
+
+    void effect()
+
+    return () => {
+      cancelled = true
     }
   }, [mlStatus, fetchAndStoreStatus])
 

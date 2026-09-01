@@ -1,66 +1,69 @@
-export type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
+import type { Permission, UserRole } from '../types/user'
 
-const VALID_ROLES: UserRole[] = ['admin', 'manager', 'editor', 'viewer']
+export type { Permission, UserRole }
 
-const DEFAULT_PERMISSIONS_BY_ROLE: Record<UserRole, string[]> = {
-  admin: ['Acesso total', 'Faturamento', 'Gestão de usuários'],
-  manager: ['Gestão de estoque', 'Anúncios', 'Vendas'],
-  editor: ['Anúncios', 'Gestão de estoque'],
-  viewer: ['Somente leitura'],
-}
+export const CANONICAL_ROLES: UserRole[] = ['ADMIN', 'MANAGER', 'SELLER', 'VIEWER']
+
+export const CANONICAL_PERMISSIONS: Permission[] = [
+  'PRODUCT_READ',
+  'PRODUCT_WRITE',
+  'LISTING_PUBLISH',
+  'SALE_READ',
+  'SALE_WRITE',
+  'USER_MANAGE',
+  'INTEGRATION_MANAGE',
+  'SETTINGS_MANAGE',
+]
 
 const PERMISSION_LABELS: Record<string, string> = {
-  'Full Access': 'Acesso total',
-  'Billing': 'Faturamento',
-  'User Management': 'Gestão de usuários',
-  'Stock Management': 'Gestão de estoque',
-  'Listings': 'Anúncios',
-  'Orders': 'Vendas',
-  'Marketplaces': 'Marketplaces',
-  'Activity': 'Atividade',
-  'View Only': 'Somente leitura',
+  PRODUCT_READ: 'Visualizar estoque',
+  PRODUCT_WRITE: 'Gestão de estoque',
+  LISTING_PUBLISH: 'Publicar anúncios',
+  SALE_READ: 'Visualizar vendas',
+  SALE_WRITE: 'Gerenciar vendas',
+  USER_MANAGE: 'Gestão de usuários',
+  INTEGRATION_MANAGE: 'Marketplaces',
+  SETTINGS_MANAGE: 'Configurações',
+  // Legado (compatibilidade retroativa de rótulos)
   'Acesso total': 'Acesso total',
-  'Faturamento': 'Faturamento',
-  'Gestão de usuários': 'Gestão de usuários',
   'Gestão de estoque': 'Gestão de estoque',
-  'Anúncios': 'Anúncios',
-  'Vendas': 'Vendas',
+  'Anúncios': 'Publicar anúncios',
+  'Vendas': 'Visualizar vendas',
+  'Gestão de usuários': 'Gestão de usuários',
+  'Marketplaces': 'Marketplaces',
   'Somente leitura': 'Somente leitura',
+  'Faturamento': 'Faturamento',
+  'Atividade': 'Atividade',
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'Administrador',
+  MANAGER: 'Gerente',
+  SELLER: 'Vendedor',
+  VIEWER: 'Visualizador',
+  admin: 'Administrador',
+  manager: 'Gerente',
+  editor: 'Vendedor',
+  seller: 'Vendedor',
+  viewer: 'Visualizador',
 }
 
 export function formatPermissionLabel(permission: string): string {
   return PERMISSION_LABELS[permission] ?? permission
 }
 
-export function parseUserRole(resource: Record<string, unknown> | null | undefined): UserRole {
-  const raw = resource?.role
-  if (typeof raw === 'string' && VALID_ROLES.includes(raw as UserRole)) {
-    return raw as UserRole
-  }
-  return 'viewer'
+export function formatRoleLabel(role: string): string {
+  return ROLE_LABELS[role] ?? role
 }
 
-export function parseUserPermissions(
-  resource: Record<string, unknown> | null | undefined,
-  role: UserRole
-): string[] {
-  const raw = resource?.permissions
-  if (Array.isArray(raw) && raw.length > 0 && raw.every((p) => typeof p === 'string')) {
-    return raw as string[]
+export function normalizeRole(raw: unknown): UserRole {
+  if (typeof raw !== 'string') return 'VIEWER'
+  const normalized = raw.trim().toUpperCase()
+  if (normalized === 'EDITOR') return 'SELLER'
+  if (CANONICAL_ROLES.includes(normalized as UserRole)) {
+    return normalized as UserRole
   }
-  return [...DEFAULT_PERMISSIONS_BY_ROLE[role]]
-}
-
-export function buildUserResource(
-  existing: Record<string, unknown> | null | undefined,
-  role: UserRole,
-  permissions: string[]
-): Record<string, unknown> {
-  return {
-    ...(existing ?? {}),
-    role,
-    permissions,
-  }
+  return 'VIEWER'
 }
 
 export function initialsFromName(name: string): string {
