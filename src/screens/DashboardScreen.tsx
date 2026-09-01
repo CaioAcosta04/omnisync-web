@@ -6,7 +6,6 @@ import {
   FiCheckCircle,
   FiClock,
   FiDollarSign,
-  FiPackage,
   FiShoppingBag,
   FiUsers,
 } from 'react-icons/fi'
@@ -37,14 +36,6 @@ type RecentEvent = {
 }
 
 const KPI_CARDS: KpiCard[] = [
-  {
-    id: 'products',
-    label: 'Total de produtos',
-    value: '12.480',
-    change: '+2,4%',
-    positive: true,
-    icon: <FiPackage size={16} />,
-  },
   {
     id: 'inventory',
     label: 'Estoque total',
