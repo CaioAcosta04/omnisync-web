@@ -34,8 +34,12 @@ export function formatPermissionLabel(permission: string): string {
 
 export function parseUserRole(resource: Record<string, unknown> | null | undefined): UserRole {
   const raw = resource?.role
-  if (typeof raw === 'string' && VALID_ROLES.includes(raw as UserRole)) {
-    return raw as UserRole
+  if (typeof raw === 'string') {
+    const normalized = raw.toLowerCase()
+    if (normalized === 'seller') return 'editor'
+    if (VALID_ROLES.includes(normalized as UserRole)) {
+      return normalized as UserRole
+    }
   }
   return 'viewer'
 }

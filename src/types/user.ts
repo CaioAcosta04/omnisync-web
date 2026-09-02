@@ -4,6 +4,8 @@ export type UserDto = {
   name: string
   email: string
   resource: Record<string, unknown> | null
+  role?: string
+  permissions?: string[]
   active: boolean
   createdAt: string
 }
@@ -12,6 +14,8 @@ export type UserUpdateRequest = {
   name?: string
   email?: string
   resource?: Record<string, unknown>
+  role?: string
+  permissions?: string[]
 }
 
 export type RegisterUserRequest = {

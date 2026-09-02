@@ -4,12 +4,14 @@ type StockEmptyStateProps = {
   mlConnected: boolean
   onConnectML: () => void
   onAddManual: () => void
+  canWrite: boolean
 }
 
 export function StockEmptyState({
   mlConnected,
   onConnectML,
   onAddManual,
+  canWrite,
 }: StockEmptyStateProps) {
   return (
     <div style={styles.wrap}>
@@ -26,17 +28,19 @@ export function StockEmptyState({
       </p>
 
       <div style={styles.actions}>
-        {!mlConnected && (
+        {canWrite && !mlConnected && (
           <button type="button" style={styles.mlBtn} onClick={onConnectML}>
             <FiShoppingCart size={16} />
             Conectar Mercado Livre
           </button>
         )}
 
-        <button type="button" style={styles.primaryBtn} onClick={onAddManual}>
-          <FiPlus size={16} />
-          Adicionar produto
-        </button>
+        {canWrite && (
+          <button type="button" style={styles.primaryBtn} onClick={onAddManual}>
+            <FiPlus size={16} />
+            Adicionar produto
+          </button>
+        )}
       </div>
     </div>
   )

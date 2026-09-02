@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  FiBell,
   FiChevronLeft,
   FiChevronRight,
   FiPlus,
@@ -12,6 +11,7 @@ import {
   type LocalSaleFormData,
 } from '../components/RegisterLocalSaleModal'
 import { useAuth } from '../contexts/AuthContext'
+import { parseUserRole } from '../lib/userResource'
 import { formatRelative } from '../lib/relativeTime'
 import { listProducts } from '../services/productsApi'
 import { createSales, listSales } from '../services/salesApi'
@@ -62,6 +62,9 @@ function isPhysicalChannel(channel: SaleChannel): boolean {
 export function OrdersScreen() {
   const { user } = useAuth()
   const systemClientId = user?.systemClientId ?? null
+  const canWrite = parseUserRole(
+    user ? { ...user.resource, role: user.role ?? user.resource.role } : null,
+  ) !== 'viewer'
 
   const [sales, setSales] = useState<SaleDto[]>([])
   const [products, setProducts] = useState<ProductDto[]>([])
@@ -259,9 +262,6 @@ export function OrdersScreen() {
           />
         </div>
         <div style={styles.topBarRight}>
-          <button type="button" style={styles.bellBtn} aria-label="Notificações">
-            <FiBell size={20} color="#6b7280" />
-          </button>
           <div style={styles.userInfo}>
             <div style={styles.userText}>
               <span style={styles.userName}>{user?.name ?? '—'}</span>
@@ -322,17 +322,19 @@ export function OrdersScreen() {
             Registre vendas da loja física e acompanhe o histórico
           </p>
         </div>
-        <button
-          type="button"
-          style={styles.primaryBtn}
-          onClick={() => {
-            setSubmitError(null)
-            setShowRegisterModal(true)
-          }}
-        >
-          <FiPlus size={18} />
-          Registrar venda
-        </button>
+        {canWrite && (
+          <button
+            type="button"
+            style={styles.primaryBtn}
+            onClick={() => {
+              setSubmitError(null)
+              setShowRegisterModal(true)
+            }}
+          >
+            <FiPlus size={18} />
+            Registrar venda
+          </button>
+        )}
       </div>
 
       <div style={styles.tabs}>
@@ -370,14 +372,16 @@ export function OrdersScreen() {
             <p style={styles.emptyText}>
               Registre a primeira venda da sua loja física para baixar o estoque automaticamente.
             </p>
-            <button
-              type="button"
-              style={styles.primaryBtn}
-              onClick={() => setShowRegisterModal(true)}
-            >
-              <FiPlus size={18} />
-              Registrar venda
-            </button>
+            {canWrite && (
+              <button
+                type="button"
+                style={styles.primaryBtn}
+                onClick={() => setShowRegisterModal(true)}
+              >
+                <FiPlus size={18} />
+                Registrar venda
+              </button>
+            )}
           </div>
         ) : (
           <>

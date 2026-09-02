@@ -13,6 +13,7 @@ import {
 import { BsBuildings } from 'react-icons/bs'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserAuthNavigation } from '../contexts/UserAuthNavigationContext'
+import { parseUserRole } from '../lib/userResource'
 
 type SettingsTab = 'profile' | 'store' | 'security' | 'appearance'
 
@@ -279,7 +280,10 @@ const SECTION_MAP: Record<SettingsTab, () => React.JSX.Element> = {
 export function SettingsScreen() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const { user } = useAuth()
-  const ActiveSection = SECTION_MAP[activeTab]
+  const isAdmin = (user?.role?.toLowerCase() ?? parseUserRole(user?.resource)) === 'admin'
+  const visibleTabs = isAdmin ? TABS : TABS.filter((tab) => tab.id !== 'store')
+  const visibleActiveTab = visibleTabs.some((tab) => tab.id === activeTab) ? activeTab : 'profile'
+  const ActiveSection = SECTION_MAP[visibleActiveTab]
 
   return (
     <div style={s.page}>
@@ -290,14 +294,14 @@ export function SettingsScreen() {
 
       <div style={s.content}>
         <nav style={s.sidebar}>
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
               style={{
                 ...s.tabBtn,
-                ...(activeTab === tab.id ? s.tabBtnActive : {}),
+                ...(visibleActiveTab === tab.id ? s.tabBtnActive : {}),
               }}
             >
               {tab.icon}
@@ -319,7 +323,7 @@ export function SettingsScreen() {
         </nav>
 
         <div style={s.panel}>
-          {activeTab === 'profile' ? (
+          {visibleActiveTab === 'profile' ? (
             <ProfileSection key={user?.id ?? 'profile'} />
           ) : (
             <ActiveSection />

@@ -36,6 +36,7 @@ import { UserLoginAccount } from './screens/user/userLogin/UserLoginAccount'
 import { UserChangePassword } from './screens/user/userChangePassword/UserChangePassword'
 import { MercadoLivreOAuthModal } from './components/MercadoLivreOAuthModal'
 import { MercadoLivreDebugPanel } from './components/MercadoLivreDebugPanel'
+import { parseUserRole, type UserRole } from './lib/userResource'
 
 const ML_DEBUG_ENABLED =
   import.meta.env.DEV ||
@@ -53,10 +54,20 @@ const AUTH_SCREENS: Record<UserAuthScreenLabel, ComponentType> = {
   ChangePassword: UserChangePassword,
 }
 
+const ROLE_SCREEN_ACCESS: Record<UserRole, readonly AppScreenLabel[]> = {
+  admin: ['Painel', 'Estoque', 'Vendas', 'Marketplaces', 'Atividade', 'Anúncios', 'Usuários', 'Configurações'],
+  manager: ['Painel', 'Estoque', 'Vendas', 'Marketplaces', 'Atividade', 'Anúncios', 'Configurações'],
+  editor: ['Painel', 'Estoque', 'Vendas', 'Atividade', 'Anúncios', 'Configurações'],
+  viewer: ['Painel', 'Estoque', 'Vendas', 'Atividade', 'Configurações'],
+}
+
 function AppShell() {
   const mainScrollRef = useRef<HTMLElement | null>(null)
   const { user, status, skipAuth, logout: authLogout } = useAuth()
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
+  const userRole = parseUserRole(
+    user ? { ...user.resource, role: user.role ?? user.resource.role } : null,
+  )
   const sidebarItems = useMemo(
     () => [
       { label: 'Painel', icon: <FiLayers size={20} />, Screen: DashboardScreen },
@@ -67,12 +78,15 @@ function AppShell() {
       { label: 'Anúncios', icon: <FiList size={20} />, Screen: ListingsScreen },
       { label: 'Usuários', icon: <FiUsers size={20} />, Screen: UsersScreen },
       { label: 'Configurações', icon: <FiSettings size={20} />, Screen: SettingsScreen },
-    ],
-    []
+    ].filter((item) => ROLE_SCREEN_ACCESS[userRole].includes(item.label as AppScreenLabel)),
+    [userRole]
   )
   const [activeLabel, setActiveLabel] = useState(sidebarItems[0]?.label ?? 'Painel')
+  const visibleActiveLabel = sidebarItems.some((item) => item.label === activeLabel)
+    ? activeLabel
+    : sidebarItems[0]?.label ?? 'Painel'
   const activeItem =
-    sidebarItems.find((item) => item.label === activeLabel) ?? sidebarItems[0]
+    sidebarItems.find((item) => item.label === visibleActiveLabel) ?? sidebarItems[0]
 
   const handleAuthNavigate = useCallback((label: UserAuthScreenLabel) => {
     setAuthScreen(label)
@@ -90,7 +104,7 @@ function AppShell() {
 
   useEffect(() => {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
-  }, [activeLabel, isAuthenticated])
+  }, [visibleActiveLabel, isAuthenticated])
 
   if (!skipAuth && status === 'loading') {
     return (
