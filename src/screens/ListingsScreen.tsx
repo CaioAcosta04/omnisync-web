@@ -12,6 +12,7 @@ import {
   FiXCircle,
 } from 'react-icons/fi'
 import { useAuth } from '../contexts/AuthContext'
+import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { getProductImageUrl } from '../lib/productImage'
 import { hasMercadoLivreListing } from '../lib/productMercadoLivre'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
@@ -20,7 +21,7 @@ import { ProductImageThumb } from '../components/ProductImageThumb'
 import { ProductDetailDialog } from '../components/ProductDetailDialog'
 import { SelectProductToAnnounceModal } from '../components/SelectProductToAnnounceModal'
 import { formatRelative } from '../lib/relativeTime'
-import { announceProduct, listProducts, syncMercadoLivreProducts } from '../services/productsApi'
+import { announceProduct, listProducts } from '../services/productsApi'
 import type { MercadoLivreProductMetadata, ProductDto } from '../types/product'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -93,6 +94,8 @@ function toMlListing(p: ProductDto): MlListing | null {
 
 export function ListingsScreen() {
   const { user } = useAuth()
+  const { catalogRevision, isSyncing, lastResult, warning, syncNow } =
+    useMercadoLivreSync()
   const systemClientId = user?.systemClientId ?? null
 
   const mlIntegration = readMercadoLivreIntegration()
@@ -105,8 +108,6 @@ export function ListingsScreen() {
   const [products, setProducts] = useState<ProductDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState(false)
-  const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [currentPage, setCurrentPage] = useState(1)
@@ -131,24 +132,15 @@ export function ListingsScreen() {
   }, [systemClientId])
 
   useEffect(() => {
+    // A revisão é um sinal de invalidação, não um parâmetro da API.
+    void catalogRevision
     void fetchListings()
-  }, [fetchListings])
+  }, [catalogRevision, fetchListings])
 
   const handleSync = useCallback(async () => {
-    if (systemClientId == null || syncing) return
-    setSyncing(true)
-    setSyncMessage(null)
-    setError(null)
-    try {
-      const result = await syncMercadoLivreProducts(systemClientId)
-      setSyncMessage(result.message)
-      await fetchListings()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao sincronizar anúncios do Mercado Livre.')
-    } finally {
-      setSyncing(false)
-    }
-  }, [systemClientId, syncing, fetchListings])
+    if (systemClientId == null || isSyncing) return
+    await syncNow('manual')
+  }, [isSyncing, syncNow, systemClientId])
 
   const unannouncedProducts = useMemo(
     () => products.filter((p) => !hasMercadoLivreListing(p)),
@@ -334,20 +326,24 @@ export function ListingsScreen() {
             type="button"
             style={{
               ...styles.syncBtn,
-              ...(!mlConnected || syncing ? styles.syncBtnDisabled : {}),
+              ...(!mlConnected || isSyncing ? styles.syncBtnDisabled : {}),
             }}
             onClick={handleSync}
-            disabled={!mlConnected || syncing}
+            disabled={!mlConnected || isSyncing}
             title={
               !mlConnected
                 ? 'Conecte o Mercado Livre para sincronizar'
-                : syncing
+                : isSyncing
                   ? 'Sincronizando…'
-                  : 'Sincronizar anúncios do Mercado Livre'
+                  : warning
+                    ? 'Última tentativa falhou. Tentar novamente'
+                    : lastResult
+                      ? `Sincronizar novamente. Último resultado: ${lastResult.message}`
+                      : 'Sincronizar anúncios do Mercado Livre'
             }
           >
-            <FiRefreshCw size={16} style={syncing ? styles.spinIcon : undefined} />
-            {syncing ? 'Sincronizando…' : 'Sincronizar ML'}
+            <FiRefreshCw size={16} style={isSyncing ? styles.spinIcon : undefined} />
+            {isSyncing ? 'Sincronizando…' : 'Sincronizar ML'}
           </button>
         </div>
       </div>
@@ -377,20 +373,6 @@ export function ListingsScreen() {
           <span>{error}</span>
           <button type="button" style={styles.retryBtn} onClick={() => void fetchListings()}>
             Tentar novamente
-          </button>
-        </div>
-      )}
-
-      {/* Sync message banner */}
-      {syncMessage && !error && (
-        <div style={styles.syncBanner} role="status">
-          <span>{syncMessage}</span>
-          <button
-            type="button"
-            style={styles.dismissBtn}
-            onClick={() => setSyncMessage(null)}
-          >
-            ✕
           </button>
         </div>
       )}
@@ -484,10 +466,10 @@ export function ListingsScreen() {
                   type="button"
                   style={styles.syncCtaBtn}
                   onClick={handleSync}
-                  disabled={syncing}
+                  disabled={isSyncing}
                 >
-                  <FiRefreshCw size={15} style={syncing ? styles.spinIcon : undefined} />
-                  {syncing ? 'Sincronizando…' : 'Sincronizar agora'}
+                  <FiRefreshCw size={15} style={isSyncing ? styles.spinIcon : undefined} />
+                  {isSyncing ? 'Sincronizando…' : 'Sincronizar agora'}
                 </button>
               </div>
             </div>
@@ -845,30 +827,6 @@ const styles = {
     cursor: 'pointer',
     flexShrink: 0,
   },
-  syncBanner: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '12px',
-    padding: '12px 16px',
-    marginBottom: '20px',
-    borderRadius: '10px',
-    backgroundColor: '#f0fdf4',
-    border: '1px solid #bbf7d0',
-    color: '#166534',
-    fontSize: '14px',
-  },
-  dismissBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#166534',
-    fontSize: '14px',
-    fontWeight: 700,
-    padding: '0 4px',
-    flexShrink: 0,
-  },
-
   /* Empty states */
   emptyWrap: {
     display: 'flex',

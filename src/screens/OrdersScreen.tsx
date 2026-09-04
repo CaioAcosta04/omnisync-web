@@ -12,6 +12,7 @@ import {
 } from '../components/RegisterLocalSaleModal'
 import { useAuth } from '../contexts/AuthContext'
 import { parseUserRole } from '../lib/userResource'
+import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { formatRelative } from '../lib/relativeTime'
 import { listProducts } from '../services/productsApi'
 import { createSales, listSales } from '../services/salesApi'
@@ -61,6 +62,7 @@ function isPhysicalChannel(channel: SaleChannel): boolean {
 
 export function OrdersScreen() {
   const { user } = useAuth()
+  const { catalogRevision } = useMercadoLivreSync()
   const systemClientId = user?.systemClientId ?? null
   const canWrite = parseUserRole(
     user ? { ...user.resource, role: user.role ?? user.resource.role } : null,
@@ -116,8 +118,11 @@ export function OrdersScreen() {
 
   useEffect(() => {
     void fetchSales()
+  }, [fetchSales])
+
+  useEffect(() => {
     void fetchProducts()
-  }, [fetchSales, fetchProducts])
+  }, [catalogRevision, fetchProducts])
 
   const handleRegisterSale = useCallback(
     async (data: LocalSaleFormData) => {

@@ -13,6 +13,7 @@ import { AppSidebar } from './components/AppSidebar'
 import { AppTopbar, type AppTopbarVariant } from './components/AppTopbar/AppTopbar'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MercadoLivreOAuthProvider } from './contexts/MercadoLivreOAuthContext'
+import { MercadoLivreSyncProvider } from './contexts/MercadoLivreSyncContext'
 import {
   AppNavigationProvider,
   type AppScreenLabel,
@@ -37,6 +38,8 @@ import { UserChangePassword } from './screens/user/userChangePassword/UserChange
 import { MercadoLivreOAuthModal } from './components/MercadoLivreOAuthModal'
 import { MercadoLivreDebugPanel } from './components/MercadoLivreDebugPanel'
 import { parseUserRole, type UserRole } from './lib/userResource'
+import { MercadoLivreSyncStatusBar } from './components/MercadoLivreSyncStatusBar'
+
 
 const ML_DEBUG_ENABLED =
   import.meta.env.DEV ||
@@ -62,6 +65,9 @@ const ROLE_SCREEN_ACCESS: Record<UserRole, readonly AppScreenLabel[]> = {
 }
 
 function AppShell() {
+
+export function AppShell() {
+
   const mainScrollRef = useRef<HTMLElement | null>(null)
   const { user, status, skipAuth, logout: authLogout } = useAuth()
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
@@ -130,6 +136,7 @@ function AppShell() {
           <div style={styles.layout}>
             <AppSidebar items={sidebarItems} activeLabel={activeLabel} onSelect={setActiveLabel} />
             <div style={styles.mainColumn}>
+              <MercadoLivreSyncStatusBar />
               <main ref={mainScrollRef} style={styles.main}>
                 {activeItem ? (
                   <div style={styles.screenTitle}>
@@ -149,9 +156,11 @@ function App() {
   return (
     <AuthProvider>
       <MercadoLivreOAuthProvider>
-        <AppShell />
-        <MercadoLivreOAuthModal />
-        {ML_DEBUG_ENABLED && <MercadoLivreDebugPanel />}
+        <MercadoLivreSyncProvider>
+          <AppShell />
+          <MercadoLivreOAuthModal />
+          {ML_DEBUG_ENABLED && <MercadoLivreDebugPanel />}
+        </MercadoLivreSyncProvider>
       </MercadoLivreOAuthProvider>
     </AuthProvider>
   )

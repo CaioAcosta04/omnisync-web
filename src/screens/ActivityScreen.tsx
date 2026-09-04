@@ -15,6 +15,7 @@ import {
 import { ActivityEmptyState } from '../components/ActivityEmptyState'
 import { useAppNavigation } from '../contexts/AppNavigationContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { formatRelative } from '../lib/relativeTime'
 import { listProducts } from '../services/productsApi'
 import { getSaleById, listSales } from '../services/salesApi'
@@ -153,6 +154,7 @@ function saleToEvents(
 
 export function ActivityScreen() {
   const { user } = useAuth()
+  const { catalogRevision } = useMercadoLivreSync()
   const { navigateTo } = useAppNavigation()
   const systemClientId = user?.systemClientId ?? null
 
@@ -250,8 +252,10 @@ export function ActivityScreen() {
   }, [systemClientId, syncing, loading])
 
   useEffect(() => {
+    // A revisão é um sinal de invalidação, não um parâmetro da API.
+    void catalogRevision
     void fetchActivity()
-  }, [fetchActivity])
+  }, [catalogRevision, fetchActivity])
 
   const allEvents = useMemo<ActivityEvent[]>(() => {
     const events = sales.flatMap((sale) => saleToEvents(sale, productNames))
