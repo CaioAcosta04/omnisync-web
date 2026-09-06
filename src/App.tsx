@@ -64,10 +64,7 @@ const ROLE_SCREEN_ACCESS: Record<UserRole, readonly AppScreenLabel[]> = {
   viewer: ['Painel', 'Estoque', 'Vendas', 'Atividade', 'Configurações'],
 }
 
-function AppShell() {
-
 export function AppShell() {
-
   const mainScrollRef = useRef<HTMLElement | null>(null)
   const { user, status, skipAuth, logout: authLogout } = useAuth()
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
