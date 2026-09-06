@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  FiBell,
   FiBox,
   FiChevronLeft,
   FiChevronRight,
@@ -16,6 +15,7 @@ import { ProductDetailDialog } from '../components/ProductDetailDialog'
 import { ProductImageThumb } from '../components/ProductImageThumb'
 import { StockEmptyState } from '../components/StockEmptyState'
 import { useAuth } from '../contexts/AuthContext'
+import { parseUserRole } from '../lib/userResource'
 import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
 import { getProductImageUrl } from '../lib/productImage'
@@ -81,6 +81,9 @@ export function StockScreen() {
   const { user } = useAuth()
   const { catalogRevision } = useMercadoLivreSync()
   const systemClientId = user?.systemClientId ?? null
+  const canWrite = parseUserRole(
+    user ? { ...user.resource, role: user.role ?? user.resource.role } : null,
+  ) !== 'viewer'
 
   const [products, setProducts] = useState<ProductDto[]>([])
   const [totalElements, setTotalElements] = useState(0)
@@ -265,9 +268,6 @@ export function StockScreen() {
           />
         </div>
         <div style={styles.topBarRight}>
-          <button type="button" style={styles.bellBtn} aria-label="Notificações">
-            <FiBell size={20} color="#6b7280" />
-          </button>
           <div style={styles.userInfo}>
             <div style={styles.userText}>
               <span style={styles.userName}>{user?.name ?? '—'}</span>
@@ -361,10 +361,12 @@ export function StockScreen() {
             <FiDownload size={16} />
             Exportar CSV
           </button>
-          <button type="button" style={styles.addProductBtn} onClick={() => setShowAddModal(true)}>
-            <FiPlus size={18} />
-            Adicionar produto
-          </button>
+          {canWrite && (
+            <button type="button" style={styles.addProductBtn} onClick={() => setShowAddModal(true)}>
+              <FiPlus size={18} />
+              Adicionar produto
+            </button>
+          )}
         </div>
       </div>
 
@@ -382,6 +384,7 @@ export function StockScreen() {
           mlConnected={mlConnected}
           onConnectML={handleConnectML}
           onAddManual={() => setShowAddModal(true)}
+          canWrite={canWrite}
         />
       )}
 

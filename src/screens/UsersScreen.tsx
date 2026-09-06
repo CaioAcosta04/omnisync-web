@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  FiBell,
   FiChevronLeft,
   FiChevronRight,
   FiEdit2,
@@ -63,7 +62,7 @@ const AVATAR_COLORS = ['#6d28d9', '#2563eb', '#0891b2', '#059669', '#d97706', '#
 const ITEMS_PER_PAGE = 5
 
 function toPlatformUser(dto: UserDto): PlatformUser {
-  const role = parseUserRole(dto.resource)
+  const role = parseUserRole({ ...dto.resource, role: dto.role ?? dto.resource?.role })
   return {
     id: String(dto.id),
     name: dto.name,
@@ -80,6 +79,7 @@ function toPlatformUser(dto: UserDto): PlatformUser {
 export function UsersScreen() {
   const { user: authUser } = useAuth()
   const systemClientId = authUser?.systemClientId ?? null
+  const isAdmin = (authUser?.role?.toLowerCase() ?? parseUserRole(authUser?.resource)) === 'admin'
 
   const [users, setUsers] = useState<PlatformUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,8 +124,10 @@ export function UsersScreen() {
       setSaveSubmitting(true)
       setSaveError(null)
       try {
-        const resource = buildUserResource(existing.resource, updated.role, updated.permissions)
-        await updateUser(Number(updated.id), { resource })
+        await updateUser(Number(updated.id), {
+          role: updated.role,
+          permissions: updated.permissions,
+        })
         if ((updated.status === 'active') !== (existing.status === 'active')) {
           await updateUserStatus(Number(updated.id), updated.status === 'active')
         }
@@ -283,13 +285,12 @@ export function UsersScreen() {
           />
         </div>
         <div style={styles.topBarRight}>
-          <button type="button" style={styles.bellBtn} aria-label="Notificações">
-            <FiBell size={20} color="#6b7280" />
-          </button>
-          <button type="button" style={styles.createUserBtn} onClick={() => setShowCreateModal(true)}>
-            <FiUserPlus size={16} />
-            Criar usuário
-          </button>
+          {isAdmin && (
+            <button type="button" style={styles.createUserBtn} onClick={() => setShowCreateModal(true)}>
+              <FiUserPlus size={16} />
+              Criar usuário
+            </button>
+          )}
         </div>
       </div>
 
@@ -402,6 +403,7 @@ export function UsersScreen() {
               const roleCfg = ROLE_CONFIG[user.role]
               const statusCfg = STATUS_CONFIG[user.status]
               const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length]
+                const canManageUser = isAdmin && Number(user.id) !== authUser?.id
 
               return (
                 <tr key={user.id} style={styles.tr}>
@@ -447,51 +449,55 @@ export function UsersScreen() {
                   </td>
                   <td style={{ ...styles.td, ...styles.tdLast }}>
                     <div style={styles.actionsCell}>
-                      <button
-                        type="button"
-                        style={styles.manageBtn}
-                        onClick={() => setManagingUser(user)}
-                      >
-                        <FiEdit2 size={14} />
-                        Gerenciar
-                      </button>
-                      <div style={{ position: 'relative' }}>
-                        <button
-                          type="button"
-                          style={styles.moreBtn}
-                          aria-label="Mais ações"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setOpenMenuId(openMenuId === user.id ? null : user.id)
-                          }}
-                        >
-                          <FiMoreVertical size={16} />
-                        </button>
-                        {openMenuId === user.id && (
-                          <div style={styles.dropdown}>
+                      {canManageUser && (
+                        <>
+                          <button
+                            type="button"
+                            style={styles.manageBtn}
+                            onClick={() => setManagingUser(user)}
+                          >
+                            <FiEdit2 size={14} />
+                            Gerenciar
+                          </button>
+                          <div style={{ position: 'relative' }}>
                             <button
                               type="button"
-                              style={styles.dropdownItem}
-                              onClick={() => {
-                                setOpenMenuId(null)
-                                setManagingUser(user)
+                              style={styles.moreBtn}
+                              aria-label="Mais ações"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setOpenMenuId(openMenuId === user.id ? null : user.id)
                               }}
                             >
-                              <FiShield size={14} />
-                              Alterar função
+                              <FiMoreVertical size={16} />
                             </button>
-                            <button
-                              type="button"
-                              style={{ ...styles.dropdownItem, color: '#dc2626' }}
-                              disabled={user.status === 'inactive'}
-                              onClick={() => void handleDeactivateUser(user.id)}
-                            >
-                              <FiTrash2 size={14} />
-                              Desativar usuário
-                            </button>
+                            {openMenuId === user.id && (
+                              <div style={styles.dropdown}>
+                                <button
+                                  type="button"
+                                  style={styles.dropdownItem}
+                                  onClick={() => {
+                                    setOpenMenuId(null)
+                                    setManagingUser(user)
+                                  }}
+                                >
+                                  <FiShield size={14} />
+                                  Alterar função
+                                </button>
+                                <button
+                                  type="button"
+                                  style={{ ...styles.dropdownItem, color: '#dc2626' }}
+                                  disabled={user.status === 'inactive'}
+                                  onClick={() => void handleDeactivateUser(user.id)}
+                                >
+                                  <FiTrash2 size={14} />
+                                  Desativar usuário
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

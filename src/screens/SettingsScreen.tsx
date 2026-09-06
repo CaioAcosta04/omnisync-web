@@ -1,56 +1,28 @@
 import { useState } from 'react'
 import {
-  FiBell,
   FiEye,
   FiEyeOff,
   FiFileText,
   FiLock,
   FiMonitor,
   FiMoon,
-  FiRefreshCw,
   FiSave,
-  FiShoppingCart,
-  FiSun,
-  FiAlertTriangle,
-  FiCornerUpLeft,
-  FiSettings,
+  FiSun,  
   FiUser,
 } from 'react-icons/fi'
 import { BsBuildings } from 'react-icons/bs'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserAuthNavigation } from '../contexts/UserAuthNavigationContext'
+import { parseUserRole } from '../lib/userResource'
 
-type SettingsTab = 'profile' | 'store' | 'security' | 'notifications' | 'appearance'
+type SettingsTab = 'profile' | 'store' | 'security' | 'appearance'
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Perfil', icon: <FiUser size={18} /> },
   { id: 'store', label: 'Loja', icon: <BsBuildings size={18} /> },
   { id: 'security', label: 'Segurança', icon: <FiLock size={18} /> },
-  { id: 'notifications', label: 'Notificações', icon: <FiBell size={18} /> },
   { id: 'appearance', label: 'Aparência', icon: <FiMonitor size={18} /> },
 ]
-
-/* ─── Toggle Switch ─── */
-
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      style={{
-        ...s.toggle,
-        backgroundColor: checked ? '#6d28d9' : '#d1d5db',
-      }}
-    >
-      <span
-        style={{
-          ...s.toggleKnob,
-          transform: checked ? 'translateX(18px)' : 'translateX(2px)',
-        }}
-      />
-    </button>
-  )
-}
 
 /* ─── Profile Section ─── */
 
@@ -214,75 +186,6 @@ function SecuritySection() {
           </button>
         </div>
       </div>
-
-      <div style={s.card}>
-        <h3 style={s.cardTitle}>Sessões Ativas</h3>
-        <p style={s.cardDesc}>Gerencie os dispositivos conectados à sua conta.</p>
-
-        <div style={s.sessionRow}>
-          <div style={s.sessionIcon}><FiMonitor size={20} /></div>
-          <div style={{ flex: 1 }}>
-            <div style={s.sessionDevice}>MacOS — Chrome</div>
-            <div style={s.sessionMeta}>São Paulo, BR · Ativo agora</div>
-          </div>
-          <span style={s.sessionBadge}>Atual</span>
-        </div>
-
-        <div style={s.sessionRow}>
-          <div style={s.sessionIcon}><FiMonitor size={20} /></div>
-          <div style={{ flex: 1 }}>
-            <div style={s.sessionDevice}>Windows — Firefox</div>
-            <div style={s.sessionMeta}>Campinas, BR · 2 dias atrás</div>
-          </div>
-          <button type="button" style={s.btnSecondarySmall}>Encerrar</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ─── Notifications Section ─── */
-
-type NotifPref = {
-  id: string
-  label: string
-  desc: string
-  icon: React.ReactNode
-  enabled: boolean
-}
-
-function NotificationsSection() {
-  const [prefs, setPrefs] = useState<NotifPref[]>([
-    { id: 'orders', label: 'Novos Pedidos', desc: 'Receba alertas quando um novo pedido for realizado.', icon: <FiShoppingCart size={20} />, enabled: true },
-    { id: 'low_stock', label: 'Estoque Baixo', desc: 'Alertas quando produtos atingirem o mínimo de estoque.', icon: <FiAlertTriangle size={20} />, enabled: true },
-    { id: 'sync', label: 'Sincronização de Anúncios', desc: 'Notifique quando anúncios forem sincronizados com marketplaces.', icon: <FiRefreshCw size={20} />, enabled: false },
-    { id: 'returns', label: 'Devoluções', desc: 'Alertas sobre solicitações de devolução de produtos.', icon: <FiCornerUpLeft size={20} />, enabled: true },
-    { id: 'system', label: 'Atualizações do Sistema', desc: 'Novidades, manutenções e atualizações da plataforma.', icon: <FiSettings size={20} />, enabled: false },
-  ])
-
-  const toggle = (id: string) => {
-    setPrefs((prev) => prev.map((p) => (p.id === id ? { ...p, enabled: !p.enabled } : p)))
-  }
-
-  return (
-    <div style={s.sectionColumn}>
-      <div style={s.card}>
-        <h3 style={s.cardTitle}>Preferências de Notificação</h3>
-        <p style={s.cardDesc}>Escolha quais alertas você deseja receber.</p>
-
-        <div style={s.notifList}>
-          {prefs.map((pref) => (
-            <div key={pref.id} style={s.notifRow}>
-              <div style={s.notifIcon}>{pref.icon}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={s.notifLabel}>{pref.label}</div>
-                <div style={s.notifDesc}>{pref.desc}</div>
-              </div>
-              <ToggleSwitch checked={pref.enabled} onChange={() => toggle(pref.id)} />
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }
@@ -295,7 +198,6 @@ type LangOption = 'pt' | 'en'
 function AppearanceSection() {
   const [theme, setTheme] = useState<ThemeOption>('light')
   const [lang, setLang] = useState<LangOption>('pt')
-  const [compact, setCompact] = useState(false)
 
   const themeOptions: { id: ThemeOption; label: string; icon: React.ReactNode; available: boolean }[] = [
     { id: 'light', label: 'Claro', icon: <FiSun size={22} />, available: true },
@@ -362,19 +264,6 @@ function AppearanceSection() {
           ))}
         </div>
       </div>
-
-      <div style={s.card}>
-        <h3 style={s.cardTitle}>Densidade</h3>
-        <p style={s.cardDesc}>Ajuste o espaçamento dos elementos na tela.</p>
-
-        <div style={s.densityRow}>
-          <div style={{ flex: 1 }}>
-            <div style={s.notifLabel}>Modo Compacto</div>
-            <div style={s.notifDesc}>Reduz o espaçamento para exibir mais informações na tela.</div>
-          </div>
-          <ToggleSwitch checked={compact} onChange={() => setCompact((v) => !v)} />
-        </div>
-      </div>
     </div>
   )
 }
@@ -385,14 +274,16 @@ const SECTION_MAP: Record<SettingsTab, () => React.JSX.Element> = {
   profile: ProfileSection,
   store: StoreSection,
   security: SecuritySection,
-  notifications: NotificationsSection,
   appearance: AppearanceSection,
 }
 
 export function SettingsScreen() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const { user } = useAuth()
-  const ActiveSection = SECTION_MAP[activeTab]
+  const isAdmin = (user?.role?.toLowerCase() ?? parseUserRole(user?.resource)) === 'admin'
+  const visibleTabs = isAdmin ? TABS : TABS.filter((tab) => tab.id !== 'store')
+  const visibleActiveTab = visibleTabs.some((tab) => tab.id === activeTab) ? activeTab : 'profile'
+  const ActiveSection = SECTION_MAP[visibleActiveTab]
 
   return (
     <div style={s.page}>
@@ -403,14 +294,14 @@ export function SettingsScreen() {
 
       <div style={s.content}>
         <nav style={s.sidebar}>
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
               style={{
                 ...s.tabBtn,
-                ...(activeTab === tab.id ? s.tabBtnActive : {}),
+                ...(visibleActiveTab === tab.id ? s.tabBtnActive : {}),
               }}
             >
               {tab.icon}
@@ -432,7 +323,7 @@ export function SettingsScreen() {
         </nav>
 
         <div style={s.panel}>
-          {activeTab === 'profile' ? (
+          {visibleActiveTab === 'profile' ? (
             <ProfileSection key={user?.id ?? 'profile'} />
           ) : (
             <ActiveSection />

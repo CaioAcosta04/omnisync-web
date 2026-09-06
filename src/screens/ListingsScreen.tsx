@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  FiBell,
   FiCheckCircle,
   FiChevronLeft,
   FiChevronRight,
@@ -306,9 +305,6 @@ export function ListingsScreen() {
           />
         </div>
         <div style={styles.topBarRight}>
-          <button type="button" style={styles.bellBtn} aria-label="Notificações">
-            <FiBell size={20} color="#6b7280" />
-          </button>
           <button
             type="button"
             style={{
