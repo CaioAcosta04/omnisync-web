@@ -11,6 +11,7 @@ import {
   buildMercadoLivreSyncStorageKey,
   resetMercadoLivreSyncMemoryStorage,
 } from '../lib/mercadoLivreSyncStorage'
+import { ApiClientError } from '../lib/apiError'
 
 const mocks = vi.hoisted(() => ({
   auth: {
@@ -39,6 +40,8 @@ function Probe() {
       <span data-testid="phase">{state.phase}</span>
       <span data-testid="result">{state.lastResult?.message ?? 'none'}</span>
       <span data-testid="revision">{state.catalogRevision}</span>
+      <span data-testid="reauth">{String(state.reauthRequired)}</span>
+      <span data-testid="last-sync">{state.lastSyncAt ?? 'none'}</span>
       <button type="button" onClick={state.dismissNotice}>dismiss</button>
     </div>
   )
@@ -292,5 +295,41 @@ describe('MercadoLivreSyncProvider', () => {
 
     await waitFor(() => expect(mocks.getStatus).toHaveBeenCalledTimes(2))
     expect(mocks.sync).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    { status: 202, code: 'ML_SYNC_IN_PROGRESS', phase: 'in-progress' },
+    { status: 429, code: 'ML_RATE_LIMITED', phase: 'rate-limited' },
+  ])('does not publish success for $code', async ({ status, code, phase }) => {
+    mocks.auth.user = { id: 1, systemClientId: 7 }
+    mocks.auth.status = 'ready'
+    mocks.getStatus.mockResolvedValue(activeStatus(7))
+    mocks.sync.mockRejectedValue(new ApiClientError({
+      message: 'safe',
+      status,
+      code,
+      retryAfterSeconds: code === 'ML_RATE_LIMITED' ? 30 : null,
+    }))
+
+    render(<MercadoLivreSyncProvider><Probe /></MercadoLivreSyncProvider>)
+
+    await waitFor(() => expect(screen.getByTestId('phase')).toHaveTextContent(phase))
+    expect(screen.getByTestId('revision')).toHaveTextContent('0')
+    expect(screen.getByTestId('last-sync')).toHaveTextContent('none')
+  })
+
+  it('exposes reauthentication without publishing a catalog revision', async () => {
+    mocks.auth.user = { id: 1, systemClientId: 7 }
+    mocks.auth.status = 'ready'
+    mocks.getStatus.mockResolvedValue(activeStatus(7))
+    mocks.sync.mockRejectedValue(new ApiClientError({
+      message: 'reconnect', status: 409, code: 'ML_REAUTH_REQUIRED',
+    }))
+
+    render(<MercadoLivreSyncProvider><Probe /></MercadoLivreSyncProvider>)
+
+    await waitFor(() => expect(screen.getByTestId('phase')).toHaveTextContent('reauth-required'))
+    expect(screen.getByTestId('reauth')).toHaveTextContent('true')
+    expect(screen.getByTestId('revision')).toHaveTextContent('0')
   })
 })

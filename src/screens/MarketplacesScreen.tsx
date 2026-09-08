@@ -10,6 +10,7 @@ import {
 import { MarketplaceCard, type MarketplaceCardData } from '../components/MarketplaceCard'
 import { useAuth } from '../contexts/AuthContext'
 import { useMercadoLivreOAuth } from '../contexts/MercadoLivreOAuthContext'
+import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import {
   readMercadoLivreIntegration,
   clearMercadoLivreIntegration,
@@ -75,7 +76,7 @@ const MARKETPLACE_LIST: MarketplaceBase[] = [
   },
 ]
 
-function formatExpiresAt(iso: string): string {
+function formatLastSyncAt(iso: string): string {
   try {
     const d = new Date(iso)
     if (Number.isNaN(d.getTime())) return iso
@@ -91,6 +92,7 @@ function formatExpiresAt(iso: string): string {
 export function MarketplacesScreen() {
   const { user } = useAuth()
   const { status: mlStatus } = useMercadoLivreOAuth()
+  const { catalogRevision } = useMercadoLivreSync()
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [connectError, setConnectError] = useState<string | null>(null)
   const [connectLoading, setConnectLoading] = useState(false)
@@ -100,7 +102,7 @@ export function MarketplacesScreen() {
     setStored(readMercadoLivreIntegration())
   }, [])
 
-  // Busca o status real no backend quando monta ou após fluxo OAuth
+  // Busca o status real ao montar, após OAuth ou após uma sincronização concluída.
   useEffect(() => {
     let active = true
     if (user != null || mlStatus === 'success') {
@@ -117,6 +119,7 @@ export function MarketplacesScreen() {
               active: status.active,
               systemClientId: status.systemClientId,
               expiresAt: status.expiresAt,
+              lastSyncAt: status.lastSyncAt,
             },
           })
           writeMercadoLivreIntegrationFromStatus(status)
@@ -136,14 +139,15 @@ export function MarketplacesScreen() {
     return () => {
       active = false
     }
-  }, [user, mlStatus])
+  }, [user, mlStatus, catalogRevision])
 
   const systemClientId = user?.systemClientId
-  const connected =
+  const hasIntegration =
     stored != null &&
     systemClientId != null &&
-    Number(stored.systemClientId) === Number(systemClientId) &&
-    stored.active === true
+    Number(stored.systemClientId) === Number(systemClientId)
+  const connected = hasIntegration && stored.active === true
+  const reconnectRequired = hasIntegration && stored.active === false
 
   const allCards = useMemo<MarketplaceCardData[]>(() => {
     return MARKETPLACE_LIST.map((m) => {
@@ -159,22 +163,25 @@ export function MarketplacesScreen() {
 
       // Mercado Livre — único suportado por enquanto
       const lastSyncLabel =
-        connected && stored?.expiresAt
-          ? `Token até ${formatExpiresAt(stored.expiresAt)}`
-          : '—'
+        hasIntegration && stored?.lastSyncAt
+          ? formatLastSyncAt(stored.lastSyncAt)
+          : hasIntegration
+            ? 'Ainda não sincronizado'
+            : '—'
       return {
         ...m,
-        connected,
+        connected: hasIntegration,
         integrationActive: connected,
         lastSyncLabel,
+        reconnectRequired,
       }
     })
-  }, [connected, stored])
+  }, [connected, hasIntegration, reconnectRequired, stored])
 
   const filtered = useMemo(() => {
     const isSupported = (m: MarketplaceCardData) => SUPPORTED_MARKETPLACE_IDS.has(m.id)
-    if (activeTab === 'connected') return allCards.filter((m) => isSupported(m) && m.connected)
-    if (activeTab === 'pending') return allCards.filter((m) => isSupported(m) && !m.connected)
+    if (activeTab === 'connected') return allCards.filter((m) => isSupported(m) && m.integrationActive)
+    if (activeTab === 'pending') return allCards.filter((m) => isSupported(m) && !m.integrationActive)
     return allCards
   }, [activeTab, allCards])
 

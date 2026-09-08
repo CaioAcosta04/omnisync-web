@@ -1,5 +1,30 @@
 const MESSAGE_KEYS = ['message', 'error', 'detail', 'title'] as const
 
+type ParsedApiError = {
+  message: string
+  code: string | null
+  retryAfterSeconds: number | null
+}
+
+export class ApiClientError extends Error {
+  readonly status: number
+  readonly code: string | null
+  readonly retryAfterSeconds: number | null
+
+  constructor(options: {
+    message: string
+    status: number
+    code?: string | null
+    retryAfterSeconds?: number | null
+  }) {
+    super(options.message)
+    this.name = 'ApiClientError'
+    this.status = options.status
+    this.code = options.code ?? null
+    this.retryAfterSeconds = options.retryAfterSeconds ?? null
+  }
+}
+
 function extractMessageFromValue(value: unknown): string | null {
   if (value == null) return null
   if (typeof value === 'string') {
@@ -49,18 +74,28 @@ export function parseApiErrorBody(body: string, fallbackMessage: string): string
   return trimmed
 }
 
-function logApiErrorResponse(res: Response, body: string): void {
-  const trimmed = body.trim()
-  if (!trimmed) {
-    console.error('[apiError]', res.status, res.url, '(empty body)')
-    return
-  }
-
+function parseApiError(body: string, fallbackMessage: string): ParsedApiError {
+  const message = parseApiErrorBody(body, fallbackMessage)
   try {
-    console.error('[apiError]', res.status, res.url, JSON.parse(trimmed))
+    const value = JSON.parse(body) as Record<string, unknown>
+    const retry = Number(value.retryAfterSeconds)
+    return {
+      message,
+      code: typeof value.code === 'string' && value.code.trim() ? value.code.trim() : null,
+      retryAfterSeconds: Number.isInteger(retry) && retry > 0 ? retry : null,
+    }
   } catch {
-    console.error('[apiError]', res.status, res.url, trimmed)
+    return { message, code: null, retryAfterSeconds: null }
   }
+}
+
+function logApiErrorResponse(res: Response, parsed: ParsedApiError): void {
+  console.error('[apiError]', {
+    status: res.status,
+    url: res.url,
+    code: parsed.code,
+    message: parsed.message,
+  })
 }
 
 /** Lê o corpo da resposta, loga o erro completo e retorna só a mensagem para o usuário. */
@@ -69,8 +104,9 @@ export async function readApiErrorMessage(
   fallbackMessage: string,
 ): Promise<string> {
   const body = await res.text()
-  logApiErrorResponse(res, body)
-  return parseApiErrorBody(body, fallbackMessage)
+  const parsed = parseApiError(body, fallbackMessage)
+  logApiErrorResponse(res, parsed)
+  return parsed.message
 }
 
 /** Lança Error com mensagem amigável; o JSON completo vai apenas para o console. */
@@ -78,5 +114,16 @@ export async function throwApiError(
   res: Response,
   fallbackMessage: string,
 ): Promise<never> {
-  throw new Error(await readApiErrorMessage(res, fallbackMessage))
+  const body = await res.text()
+  const parsed = parseApiError(body, fallbackMessage)
+  logApiErrorResponse(res, parsed)
+  const headerRetry = Number(res.headers.get('Retry-After'))
+  throw new ApiClientError({
+    message: parsed.message,
+    status: res.status,
+    code: parsed.code,
+    retryAfterSeconds:
+      parsed.retryAfterSeconds ??
+      (Number.isInteger(headerRetry) && headerRetry > 0 ? headerRetry : null),
+  })
 }

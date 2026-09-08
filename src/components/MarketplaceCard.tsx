@@ -11,6 +11,7 @@ export type MarketplaceCardData = {
   lastSyncLabel: string
   /** Card marcado como "Em breve" — não permite interação */
   disabled?: boolean
+  reconnectRequired?: boolean
 }
 
 type MarketplaceCardProps = {
@@ -26,7 +27,7 @@ export function MarketplaceCard({
   onDisconnect,
   onConnect,
 }: MarketplaceCardProps) {
-  const { name, apiType, icon, connected, integrationActive, lastSyncLabel, disabled } =
+  const { name, apiType, icon, connected, integrationActive, lastSyncLabel, disabled, reconnectRequired } =
     marketplace
 
   return (
@@ -79,7 +80,13 @@ export function MarketplaceCard({
           <div>
             <p style={styles.metaLabel}>STATUS</p>
             <p style={{ ...styles.metaValue, ...(disabled ? styles.metaValueDisabled : {}) }}>
-              {disabled ? 'Em breve' : connected ? 'Conectado' : 'Não conectado'}
+              {disabled
+                ? 'Em breve'
+                : reconnectRequired
+                  ? 'Reconexão necessária'
+                  : connected
+                    ? 'Conectado'
+                    : 'Não conectado'}
             </p>
           </div>
           <div>
@@ -92,7 +99,7 @@ export function MarketplaceCard({
 
         {!disabled && (
           <div style={styles.actions}>
-            {connected ? (
+            {connected && integrationActive ? (
               <>
                 <button
                   type="button"
@@ -113,7 +120,7 @@ export function MarketplaceCard({
             ) : (
               <button type="button" style={styles.btnConnect} onClick={() => onConnect?.()}>
                 <FiPlus size={18} />
-                Conectar Marketplace
+                {reconnectRequired ? 'Reconectar Mercado Livre' : 'Conectar Marketplace'}
               </button>
             )}
           </div>

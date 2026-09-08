@@ -16,19 +16,34 @@ import {
   readMercadoLivreSyncReference,
 } from '../lib/mercadoLivreSyncStorage'
 import { logMlSyncEvent } from '../lib/mlSyncDebug'
+import { ApiClientError } from '../lib/apiError'
+import {
+  markMercadoLivreIntegrationInactive,
+  writeMercadoLivreIntegrationFromStatus,
+} from '../lib/mercadoLivreStorage'
 import { getMercadoLivreStatus } from '../services/mercadoLivreApi'
 import { syncMercadoLivreProducts } from '../services/productsApi'
 import type { MercadoLivreSyncResponse } from '../types/product'
 import { useAuth } from './AuthContext'
 import { useMercadoLivreOAuth } from './MercadoLivreOAuthContext'
 
-export type MercadoLivreSyncPhase = 'idle' | 'checking' | 'syncing' | 'success' | 'error'
+export type MercadoLivreSyncPhase =
+  | 'idle'
+  | 'checking'
+  | 'syncing'
+  | 'success'
+  | 'in-progress'
+  | 'rate-limited'
+  | 'reauth-required'
+  | 'error'
 
 type MercadoLivreSyncContextValue = {
   phase: MercadoLivreSyncPhase
   isSyncing: boolean
   lastResult: MercadoLivreSyncResponse | null
   warning: string | null
+  lastSyncAt: string | null
+  reauthRequired: boolean
   catalogRevision: number
   syncNow: (mode?: MercadoLivreSyncMode) => Promise<MercadoLivreSyncResponse | null>
   dismissNotice: () => void
@@ -39,6 +54,7 @@ type TenantSyncState = {
   phase: MercadoLivreSyncPhase
   lastResult: MercadoLivreSyncResponse | null
   warning: string | null
+  lastSyncAt: string | null
   catalogRevision: number
 }
 
@@ -54,6 +70,7 @@ const emptyStateFor = (tenantId: number | null): TenantSyncState => ({
   phase: 'idle',
   lastResult: null,
   warning: null,
+  lastSyncAt: null,
   catalogRevision: 0,
 })
 
@@ -102,6 +119,8 @@ export function MercadoLivreSyncProvider({ children }: MercadoLivreSyncProviderP
           phase: 'success',
           lastResult: outcome.result,
           warning: null,
+          lastSyncAt:
+            outcome.result.lastSyncAt ?? new Date(outcome.completedAt).toISOString(),
           catalogRevision:
             (current.tenantId === tenantId ? current.catalogRevision : 0) + 1,
         }))
@@ -111,10 +130,47 @@ export function MercadoLivreSyncProvider({ children }: MercadoLivreSyncProviderP
           syncedProducts: outcome.result.syncedProducts,
           durationMs: Date.now() - startedAt,
         })
+        try {
+          const refreshedStatus = await getMercadoLivreStatus()
+          if (activeTenantRef.current === tenantId) {
+            writeMercadoLivreIntegrationFromStatus(refreshedStatus)
+          }
+        } catch {
+          // O sync concluído continua válido; a próxima consulta de status reconcilia o cache.
+        }
         return outcome.result
       }
 
       if (outcome.status === 'error') {
+        const apiError = outcome.error instanceof ApiClientError ? outcome.error : null
+        if (apiError?.code === 'ML_REAUTH_REQUIRED') {
+          markMercadoLivreIntegrationInactive(tenantId)
+          setState((current) => ({
+            ...(current.tenantId === tenantId ? current : emptyStateFor(tenantId)),
+            phase: 'reauth-required',
+            warning: 'Reconecte sua conta do Mercado Livre para sincronizar novamente.',
+          }))
+          return null
+        }
+        if (apiError?.code === 'ML_SYNC_IN_PROGRESS' || apiError?.status === 202) {
+          setState((current) => ({
+            ...(current.tenantId === tenantId ? current : emptyStateFor(tenantId)),
+            phase: 'in-progress',
+            warning: 'Uma sincronização do Mercado Livre já está em andamento.',
+          }))
+          return null
+        }
+        if (apiError?.code === 'ML_RATE_LIMITED' || apiError?.status === 429) {
+          const retryHint = apiError.retryAfterSeconds
+            ? ` Tente novamente em ${apiError.retryAfterSeconds} segundos.`
+            : ' Tente novamente mais tarde.'
+          setState((current) => ({
+            ...(current.tenantId === tenantId ? current : emptyStateFor(tenantId)),
+            phase: 'rate-limited',
+            warning: `O Mercado Livre limitou temporariamente as sincronizações.${retryHint}`,
+          }))
+          return null
+        }
         setState((current) => ({
           ...(current.tenantId === tenantId ? current : emptyStateFor(tenantId)),
           phase: 'error',
@@ -169,6 +225,20 @@ export function MercadoLivreSyncProvider({ children }: MercadoLivreSyncProviderP
         const integration = await getMercadoLivreStatus()
         if (cancelled || activeTenantRef.current !== tenantId) return
 
+        writeMercadoLivreIntegrationFromStatus(integration)
+        setState((current) => ({
+          ...(current.tenantId === tenantId ? current : emptyStateFor(tenantId)),
+          lastSyncAt:
+            integration.lastSyncAt ??
+            (current.tenantId === tenantId ? current.lastSyncAt : null),
+          ...(integration.connected && integration.active === false
+            ? {
+                phase: 'reauth-required' as const,
+                warning: 'Reconecte sua conta do Mercado Livre para sincronizar novamente.',
+              }
+            : {}),
+        }))
+
         const eligible =
           integration.connected === true &&
           integration.active === true &&
@@ -221,11 +291,14 @@ export function MercadoLivreSyncProvider({ children }: MercadoLivreSyncProviderP
       if (reference.outcome === 'success' && reference.lastResult) {
         if (appliedAttemptIdsRef.current.has(reference.attemptId)) return
         appliedAttemptIdsRef.current.add(reference.attemptId)
+        const storedResult = reference.lastResult
         setState((current) => ({
           ...(current.tenantId === tenantId ? current : emptyStateFor(tenantId)),
           phase: 'success',
-          lastResult: reference.lastResult ?? null,
+          lastResult: storedResult,
           warning: null,
+          lastSyncAt:
+            storedResult.lastSyncAt ?? new Date(reference.lastSyncAt!).toISOString(),
           catalogRevision:
             (current.tenantId === tenantId ? current.catalogRevision : 0) + 1,
         }))
@@ -264,6 +337,8 @@ export function MercadoLivreSyncProvider({ children }: MercadoLivreSyncProviderP
       isSyncing: visibleState.phase === 'syncing',
       lastResult: visibleState.lastResult,
       warning: visibleState.warning,
+      lastSyncAt: visibleState.lastSyncAt,
+      reauthRequired: visibleState.phase === 'reauth-required',
       catalogRevision: visibleState.catalogRevision,
       syncNow,
       dismissNotice,

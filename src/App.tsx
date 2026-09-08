@@ -133,7 +133,7 @@ export function AppShell() {
           <div style={styles.layout}>
             <AppSidebar items={sidebarItems} activeLabel={activeLabel} onSelect={setActiveLabel} />
             <div style={styles.mainColumn}>
-              <MercadoLivreSyncStatusBar />
+              <MercadoLivreSyncStatusBar onReconnect={() => setActiveLabel('Marketplaces')} />
               <main ref={mainScrollRef} style={styles.main}>
                 {activeItem ? (
                   <div style={styles.screenTitle}>

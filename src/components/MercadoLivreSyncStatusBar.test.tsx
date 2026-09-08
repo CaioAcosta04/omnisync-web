@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     isSyncing: false,
     lastResult: null as null | { message: string; syncedProducts: number },
     warning: null as string | null,
+    reauthRequired: false,
     dismissNotice: vi.fn(),
   },
   auth: {
@@ -40,6 +41,7 @@ beforeEach(() => {
     isSyncing: false,
     lastResult: null,
     warning: null,
+    reauthRequired: false,
     dismissNotice: vi.fn(),
   }
   mocks.auth.user = null
@@ -87,5 +89,16 @@ describe('MercadoLivreSyncStatusBar', () => {
 
     expect(screen.getByRole('main')).toBeVisible()
     expect(screen.queryByText('Sincronizando…')).not.toBeInTheDocument()
+  })
+
+  it('offers an accessible reconnect action for terminal authorization failure', async () => {
+    const onReconnect = vi.fn()
+    mocks.state.phase = 'reauth-required'
+    mocks.state.warning = 'Reconecte sua conta.'
+    mocks.state.reauthRequired = true
+    render(<MercadoLivreSyncStatusBar onReconnect={onReconnect} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reconectar Mercado Livre' }))
+    expect(onReconnect).toHaveBeenCalledOnce()
   })
 })

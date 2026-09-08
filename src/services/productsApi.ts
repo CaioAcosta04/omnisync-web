@@ -27,7 +27,9 @@ export async function syncMercadoLivreProducts(
     `/api/integrations/mercadolivre/catalog/${systemClientId}/sync`,
     { method: 'POST' }
   )
-  if (!res.ok) await throwApiError(res, 'Falha ao sincronizar os produtos do Mercado Livre.')
+  if (res.status !== 200) {
+    await throwApiError(res, 'Falha ao sincronizar os produtos do Mercado Livre.')
+  }
   return (await res.json()) as MercadoLivreSyncResponse
 }
 

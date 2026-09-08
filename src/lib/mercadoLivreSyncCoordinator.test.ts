@@ -109,6 +109,27 @@ describe('runMercadoLivreSync', () => {
     })
   })
 
+  it('persists the canonical server timestamp and keeps the legacy fallback', async () => {
+    const serverInstant = '2026-09-08T15:30:00Z'
+    await runMercadoLivreSync({
+      systemClientId: 7,
+      mode: 'manual',
+      cooldownMs: 600_000,
+      now: () => Date.parse('2026-09-08T16:00:00Z'),
+      storage: localStorage,
+      lockManager: null,
+      createAttemptId: () => 'server-time',
+      sync: async () => ({ message: 'ok', syncedProducts: 0, lastSyncAt: serverInstant }),
+    })
+    expect(readMercadoLivreSyncReference(
+      7,
+      localStorage,
+      Date.parse('2026-09-08T16:01:00Z'),
+    )?.lastSyncAt).toBe(
+      Date.parse(serverInstant),
+    )
+  })
+
   it('keeps a failed attempt in cooldown without claiming success', async () => {
     const sync = vi.fn().mockRejectedValue(new Error('external failure'))
     await expect(

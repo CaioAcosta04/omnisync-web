@@ -4,6 +4,7 @@ export type MercadoLivreIntegrationStatusResponse = {
   active: boolean | null
   expiresAt: string | null
   marketplace: string | null
+  lastSyncAt?: string | null
 }
 
 export type MercadoLivreConnectUrlResponse = {
@@ -22,4 +23,5 @@ export type MercadoLivreIntegrationResponse = {
   active: boolean
   expiresAt: string
   resource: Record<string, unknown>
+  lastSyncAt?: string | null
 }

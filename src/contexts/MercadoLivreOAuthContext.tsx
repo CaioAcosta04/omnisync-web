@@ -81,7 +81,7 @@ export function MercadoLivreOAuthProvider({ children }: { children: ReactNode })
       category: 'api',
       level: 'info',
       message: 'POST /exchange iniciado',
-      data: { code: params.code.slice(0, 12) + '…' },
+      data: { hasCode: true, hasState: true },
     })
     setState({ status: 'processing' })
 

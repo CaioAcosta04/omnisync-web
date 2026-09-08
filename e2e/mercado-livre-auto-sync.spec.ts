@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Route } from '@playwright/test'
 
-type SyncResponse = 'success' | 'failure' | 'pending'
+type SyncResponse = 'success' | 'failure' | 'pending' | 'reauth' | 'in-progress' | 'rate-limited'
 
 type ApiHarness = {
   getSyncCount: () => number
@@ -30,7 +30,9 @@ async function installAuthenticatedApi(
   options: { active?: boolean; syncResponses?: SyncResponse[] } = {},
 ): Promise<ApiHarness> {
   let tenantId = 7
-  const active = options.active ?? true
+  let active = options.active ?? true
+  let connected = active
+  let lastSyncAt: string | null = null
   const responses = [...(options.syncResponses ?? ['success'])]
   const counts = new Map<number, number>()
   const pendingResolvers: Array<() => void> = []
@@ -53,7 +55,8 @@ async function installAuthenticatedApi(
         systemClientId: tenantId,
         name: `Tenant ${tenantId}`,
         email: `tenant-${tenantId}@local.test`,
-        resource: {},
+        resource: { role: 'admin' },
+        role: 'admin',
         active: true,
         createdAt: '2026-08-28T12:00:00',
       })
@@ -62,11 +65,12 @@ async function installAuthenticatedApi(
 
     if (pathname === '/api/integrations/mercadolivre/status') {
       await json(route, {
-        connected: active,
-        active: active ? true : null,
+        connected,
+        active: connected ? active : null,
         systemClientId: tenantId,
         expiresAt: null,
         marketplace: active ? 'MERCADO_LIVRE' : null,
+        lastSyncAt,
       })
       return
     }
@@ -83,7 +87,33 @@ async function installAuthenticatedApi(
         await json(route, { message: 'detalhe externo que não deve chegar à interface' }, 503)
         return
       }
-      await json(route, { message: 'Catálogo atualizado', syncedProducts: 0 })
+      if (response === 'reauth') {
+        connected = true
+        active = false
+        await json(route, {
+          message: 'Reconecte sua conta do Mercado Livre para sincronizar novamente.',
+          code: 'ML_REAUTH_REQUIRED',
+        }, 409)
+        return
+      }
+      if (response === 'in-progress') {
+        await json(route, { message: 'Sync em andamento', code: 'ML_SYNC_IN_PROGRESS', lastSyncAt }, 202)
+        return
+      }
+      if (response === 'rate-limited') {
+        await json(route, {
+          message: 'Aguarde', code: 'ML_RATE_LIMITED', retryAfterSeconds: 30,
+        }, 429)
+        return
+      }
+      lastSyncAt = '2026-09-08T15:00:00Z'
+      await json(route, {
+        message: 'Catálogo atualizado',
+        syncedProducts: 0,
+        createdProducts: 0,
+        updatedProducts: 0,
+        lastSyncAt,
+      })
       return
     }
 
@@ -190,4 +220,29 @@ test('contains a 503 and permits a successful manual retry', async ({ context, p
   await page.reload()
   await page.waitForTimeout(200)
   expect(api.getSyncCount()).toBe(2)
+})
+
+test('turns 409 into a non-blocking reconnect journey', async ({ context, page }) => {
+  await installAuthenticatedApi(context, { syncResponses: ['reauth'] })
+  await page.goto('/')
+
+  const reconnect = page.getByRole('button', { name: 'Reconectar Mercado Livre' })
+  await expect(reconnect).toBeVisible()
+  await reconnect.click()
+  await expect(page.getByRole('heading', { name: 'Integrações de Marketplace' })).toBeVisible()
+  await expect(page.getByText('Reconexão necessária')).toBeVisible()
+})
+
+test('keeps the canonical successful timestamp after navigation and reload', async ({ context, page }) => {
+  await installAuthenticatedApi(context)
+  await page.goto('/')
+  await expect(page.getByRole('status')).toContainText('Catálogo atualizado')
+
+  await page.getByText('Marketplaces', { exact: true }).click()
+  await expect(page.getByText('ÚLTIMA SINCRONIZAÇÃO').first()).toBeVisible()
+  await expect(page.getByText('Ainda não sincronizado')).toHaveCount(0)
+  await expect(page.getByText(/Token até/i)).toHaveCount(0)
+  await page.reload()
+  await page.getByText('Marketplaces', { exact: true }).click()
+  await expect(page.getByText('Ainda não sincronizado')).toHaveCount(0)
 })

@@ -97,13 +97,17 @@ async function executeInsideLock(
   try {
     const result = await options.sync()
     const completedAt = now()
+    const serverCompletedAt = result.lastSyncAt ? Date.parse(result.lastSyncAt) : Number.NaN
+    const canonicalCompletedAt = Number.isFinite(serverCompletedAt)
+      ? serverCompletedAt
+      : completedAt
     writeMercadoLivreSyncReference(
       {
         version: 1,
         systemClientId: options.systemClientId,
         attemptId,
         lastAttemptAt: startedAt,
-        lastSyncAt: completedAt,
+        lastSyncAt: canonicalCompletedAt,
         outcome: 'success',
         lastResult: result,
       },

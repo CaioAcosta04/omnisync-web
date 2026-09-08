@@ -28,6 +28,23 @@
   border-color: #fecaca;
 }
 
+.ml-sync-status--info {
+  color: #854d0e;
+  background: #fefce8;
+  border-color: #fde68a;
+}
+
+.ml-sync-status__action {
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  padding: 6px 10px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .ml-sync-status__message {
   flex: 1;
   min-width: 0;
@@ -53,6 +70,11 @@
 }
 
 .ml-sync-status__dismiss:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.ml-sync-status__action:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;
 }

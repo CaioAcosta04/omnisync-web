@@ -13,7 +13,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 1, systemClientId: 7 }, status: 'ready', skipAuth: false }),
+  useAuth: () => ({
+    user: { id: 1, systemClientId: 7, resource: {}, role: 'admin' },
+    status: 'ready',
+    skipAuth: false,
+  }),
 }))
 vi.mock('../contexts/MercadoLivreSyncContext', () => ({
   useMercadoLivreSync: () => ({

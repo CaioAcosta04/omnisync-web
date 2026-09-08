@@ -18,6 +18,9 @@ export type { PageResponse } from './page'
 export type MercadoLivreSyncResponse = {
   message: string
   syncedProducts: number
+  createdProducts?: number
+  updatedProducts?: number
+  lastSyncAt?: string
 }
 
 export type MercadoLivreProductMetadata = {

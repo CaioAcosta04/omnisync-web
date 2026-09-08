@@ -7,7 +7,7 @@ const STORAGE_KEY = 'omnisync.mercadolivre.integration'
 
 export type StoredMlIntegration = Pick<
   MercadoLivreIntegrationResponse,
-  'systemClientId' | 'active' | 'expiresAt'
+  'systemClientId' | 'active' | 'expiresAt' | 'lastSyncAt'
 >
 
 export function readMercadoLivreIntegration(): StoredMlIntegration | null {
@@ -29,7 +29,8 @@ export function readMercadoLivreIntegration(): StoredMlIntegration | null {
         : data.expiresAt != null
           ? String(data.expiresAt)
           : ''
-    return { systemClientId, active, expiresAt }
+    const lastSyncAt = typeof data.lastSyncAt === 'string' ? data.lastSyncAt : null
+    return { systemClientId, active, expiresAt, lastSyncAt }
   } catch {
     return null
   }
@@ -48,6 +49,7 @@ export function writeMercadoLivreIntegration(res: MercadoLivreIntegrationRespons
         : res.expiresAt != null
           ? String(res.expiresAt)
           : '',
+    lastSyncAt: typeof res.lastSyncAt === 'string' ? res.lastSyncAt : null,
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 }
@@ -72,8 +74,15 @@ export function writeMercadoLivreIntegrationFromStatus(
         : status.expiresAt != null
           ? String(status.expiresAt)
           : '',
+    lastSyncAt: typeof status.lastSyncAt === 'string' ? status.lastSyncAt : null,
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+}
+
+export function markMercadoLivreIntegrationInactive(systemClientId: number): void {
+  const current = readMercadoLivreIntegration()
+  if (!current || Number(current.systemClientId) !== Number(systemClientId)) return
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, active: false }))
 }
 
 export function clearMercadoLivreIntegration(): void {
