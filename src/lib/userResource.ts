@@ -49,7 +49,7 @@ export function parseUserPermissions(
   role: UserRole
 ): string[] {
   const raw = resource?.permissions
-  if (Array.isArray(raw) && raw.length > 0 && raw.every((p) => typeof p === 'string')) {
+  if (Array.isArray(raw) && raw.every((p) => typeof p === 'string')) {
     return raw as string[]
   }
   return [...DEFAULT_PERMISSIONS_BY_ROLE[role]]

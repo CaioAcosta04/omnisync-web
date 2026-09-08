@@ -173,21 +173,12 @@ export function UserCreateAccount() {
     setIsSubmitting(true)
     setErrorMessage('')
     try {
-      const companyRes = await apiFetch('/api/client', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: savedCompany.name, document: savedCompany.document }),
-      })
-      if (!companyRes.ok) await throwApiError(companyRes, 'Não foi possível criar a empresa.')
-      const companyResult = (await companyRes.json()) as { id?: number }
-      const systemClientId = companyResult.id
-      if (!systemClientId) throw new Error('Empresa criada sem retorno de ID.')
-
-      const registerRes = await apiFetch('/api/auth/register', {
+      const registerRes = await apiFetch('/api/auth/register-company', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          systemClientId,
+          companyName: savedCompany.name,
+          document: savedCompany.document,
           name: fullName.trim(),
           email: email.trim(),
           password,
