@@ -2,10 +2,11 @@ import { API_BASE_URL } from '../config/api'
 
 const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true'
 
-/** Rotas em que 401/403 não dispara refresh (evita loop e comportamento estranho no login). */
+/** Rotas em que 401 não dispara refresh (evita loop no login e no cadastro). */
 const AUTH_PATHS_NO_REFRESH = new Set([
   '/api/auth/login',
   '/api/auth/register',
+  '/api/auth/register-company',
   '/api/auth/refresh',
   '/api/auth/logout',
 ])
@@ -26,7 +27,7 @@ function requestPathname(path: string): string {
 }
 
 function shouldRetryAfterRefresh(path: string, status: number): boolean {
-  if (status !== 401 && status !== 403) return false
+  if (status !== 401) return false
   const pathname = requestPathname(path)
   if (AUTH_PATHS_NO_REFRESH.has(pathname)) return false
   return pathname.startsWith('/api/')
@@ -59,12 +60,6 @@ export function tryRefreshAccessToken(): Promise<boolean> {
 }
 
 function rawFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  const method = (init.method ?? 'GET').toUpperCase()
-  let payload: unknown
-  if (init.body != null) {
-    try { payload = JSON.parse(init.body as string) } catch { payload = init.body }
-  }
-  console.log(`[apiFetch] ${method} ${url}`, payload !== undefined ? payload : '(no body)')
   return fetch(url, {
     ...init,
     credentials: init.credentials ?? 'include',
@@ -73,7 +68,7 @@ function rawFetch(url: string, init: RequestInit = {}): Promise<Response> {
 
 /**
  * Fetch para a API OmniSync com cookies httpOnly (access/refresh).
- * Em 401/403 em rotas /api (exceto login/register/refresh/logout), tenta uma vez
+ * Em 401 em rotas /api (exceto as rotas de autenticação), tenta uma vez
  * POST /api/auth/refresh e repete a requisição original.
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
