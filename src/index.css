@@ -18,6 +18,12 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes dash-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.45; }
+  100% { opacity: 1; }
+}
+
 /* Sidebar: item ativo (Dashboard) – fundo e texto roxo */
 .ps-menuitem-root.ps-active .ps-menu-button {
   background-color: #ede9fe !important;
