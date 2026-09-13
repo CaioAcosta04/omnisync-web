@@ -17,8 +17,10 @@ import { useAppNavigation } from '../contexts/AppNavigationContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { formatRelative } from '../lib/relativeTime'
+import { getMercadoLivreStatus } from '../services/mercadoLivreApi'
 import { listProducts } from '../services/productsApi'
 import { getSaleById, listSales } from '../services/salesApi'
+import type { MercadoLivreIntegrationStatusResponse } from '../types/mercadolivre'
 import type { SaleChannel, SaleDto } from '../types/sale'
 
 // ─── Domain types ────────────────────────────────────────────────────────────
@@ -76,6 +78,42 @@ const CHANNEL_DISPLAY: Record<SaleChannel, { label: string; letter: string; colo
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const PAGE_SIZE = 50
+
+// ─── Saúde dos canais ──────────────────────────────────────────────────────────
+
+type ChannelHealthTone = 'online' | 'attention' | 'offline'
+
+const HEALTH_TONE_STYLE: Record<ChannelHealthTone, { dot: string; color: string }> = {
+  online: { dot: '#22c55e', color: '#16a34a' },
+  attention: { dot: '#f59e0b', color: '#d97706' },
+  offline: { dot: '#9ca3af', color: '#6b7280' },
+}
+
+/** Deriva o estado de saúde do canal a partir do status real da integração. */
+function deriveChannelHealth(status: MercadoLivreIntegrationStatusResponse | null): {
+  tone: ChannelHealthTone
+  label: string
+  detail: string
+} {
+  if (!status || !status.connected) {
+    return { tone: 'offline', label: 'Não conectado', detail: 'Conecte em Marketplaces.' }
+  }
+  if (status.active === false) {
+    return { tone: 'attention', label: 'Reconexão necessária', detail: 'A autorização expirou.' }
+  }
+  const expired = status.expiresAt ? new Date(status.expiresAt).getTime() <= Date.now() : false
+  if (expired) {
+    return {
+      tone: 'attention',
+      label: 'Token expirando',
+      detail: 'Será renovado na próxima sincronização.',
+    }
+  }
+  const detail = status.lastSyncAt
+    ? `Sincronizado ${formatRelative(status.lastSyncAt)}`
+    : 'Ainda não sincronizado.'
+  return { tone: 'online', label: 'Conectado', detail }
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -167,6 +205,10 @@ export function ActivityScreen() {
   const [totalElements, setTotalElements] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
+  const [channelStatus, setChannelStatus] = useState<MercadoLivreIntegrationStatusResponse | null>(
+    null,
+  )
+  const [channelStatusLoading, setChannelStatusLoading] = useState(true)
 
   const fetchActivity = useCallback(async () => {
     if (systemClientId == null) return
@@ -251,11 +293,25 @@ export function ActivityScreen() {
     }
   }, [systemClientId, syncing, loading])
 
+  const fetchChannelStatus = useCallback(async () => {
+    if (systemClientId == null) return
+    setChannelStatusLoading(true)
+    try {
+      setChannelStatus(await getMercadoLivreStatus())
+    } catch {
+      // Sem status → tratamos como "não conectado" na derivação.
+      setChannelStatus(null)
+    } finally {
+      setChannelStatusLoading(false)
+    }
+  }, [systemClientId])
+
   useEffect(() => {
     // A revisão é um sinal de invalidação, não um parâmetro da API.
     void catalogRevision
     void fetchActivity()
-  }, [catalogRevision, fetchActivity])
+    void fetchChannelStatus()
+  }, [catalogRevision, fetchActivity, fetchChannelStatus])
 
   const allEvents = useMemo<ActivityEvent[]>(() => {
     const events = sales.flatMap((sale) => saleToEvents(sale, productNames))
@@ -554,31 +610,37 @@ export function ActivityScreen() {
 
       {/* Right sidebar */}
       <aside style={styles.sidebar}>
-        <h3 style={styles.sidebarSectionTitle}>ESTATÍSTICAS EM TEMPO REAL</h3>
+        <h3 style={styles.sidebarSectionTitle}>SAÚDE DOS CANAIS</h3>
 
-        {/* Sales Velocity */}
-        <div style={styles.statCard}>
-          <div style={styles.statHeader}>
-            <span style={styles.statLabel}>Velocidade de vendas</span>
-            <span style={styles.statTrend}>+12%</span>
+        {channelStatusLoading ? (
+          <div style={styles.channelCard}>
+            <span style={styles.channelLoading}>Verificando integração…</span>
           </div>
-          <div style={styles.statValue}>
-            <span style={styles.statBigNumber}>42</span>
-            <span style={styles.statUnit}>pedidos/h</span>
-          </div>
-          <div style={styles.barChart}>
-            {[35, 50, 40, 55, 45, 60, 80].map((h, i) => (
-              <div
-                key={i}
-                style={{
-                  ...styles.bar,
-                  height: `${h}%`,
-                  backgroundColor: i === 6 ? '#6366f1' : '#c7d2fe',
-                }}
-              />
-            ))}
-          </div>
-        </div>
+        ) : (
+          (() => {
+            const health = deriveChannelHealth(channelStatus)
+            const tone = HEALTH_TONE_STYLE[health.tone]
+            return (
+              <div style={styles.channelCard}>
+                <div style={styles.channelHeader}>
+                  <span style={styles.channelBadge}>M</span>
+                  <span style={styles.channelName}>Mercado Livre</span>
+                </div>
+                <div style={styles.channelStatusRow}>
+                  <span style={{ ...styles.channelDot, backgroundColor: tone.dot }} />
+                  <span style={{ ...styles.channelStatusLabel, color: tone.color }}>
+                    {health.label}
+                  </span>
+                </div>
+                <p style={styles.channelDetail}>{health.detail}</p>
+              </div>
+            )
+          })()
+        )}
+
+        <p style={styles.channelHint}>
+          Apenas o Mercado Livre está integrado. Outros canais chegam em breve.
+        </p>
       </aside>
     </div>
   )
@@ -993,57 +1055,69 @@ const styles = {
     marginBottom: '14px',
   },
 
-  /* Stat card */
-  statCard: {
-    padding: '18px',
+  /* Channel health card */
+  channelCard: {
+    padding: '16px',
     backgroundColor: '#ffffff',
     border: '1px solid #e5e7eb',
     borderRadius: '12px',
-    marginBottom: '14px',
+    marginBottom: '12px',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '10px',
   },
-  statHeader: {
+  channelHeader: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: '10px',
   },
-  statLabel: {
-    fontSize: '13px',
-    fontWeight: 600,
-    color: '#6b7280',
-  },
-  statTrend: {
+  channelBadge: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '8px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffe600',
+    color: '#333333',
     fontSize: '13px',
     fontWeight: 700,
-    color: '#16a34a',
+    flexShrink: 0,
   },
-  statValue: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: '6px',
-  },
-  statBigNumber: {
-    fontSize: '32px',
+  channelName: {
+    fontSize: '14px',
     fontWeight: 700,
     color: '#111827',
-    lineHeight: 1,
   },
-  statUnit: {
-    fontSize: '14px',
-    color: '#6b7280',
-  },
-  barChart: {
+  channelStatusRow: {
     display: 'flex',
-    alignItems: 'flex-end',
-    gap: '6px',
-    height: '48px',
-    marginTop: '4px',
+    alignItems: 'center',
+    gap: '8px',
   },
-  bar: {
-    flex: 1,
-    borderRadius: '3px',
-    minWidth: '12px',
+  channelDot: {
+    width: '9px',
+    height: '9px',
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  channelStatusLabel: {
+    fontSize: '13px',
+    fontWeight: 700,
+  },
+  channelDetail: {
+    fontSize: '12px',
+    color: '#6b7280',
+    lineHeight: 1.4,
+    margin: 0,
+  },
+  channelLoading: {
+    fontSize: '13px',
+    color: '#9ca3af',
+  },
+  channelHint: {
+    fontSize: '11px',
+    color: '#9ca3af',
+    lineHeight: 1.4,
+    margin: 0,
   },
 } as const
