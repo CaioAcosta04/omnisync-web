@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  FiActivity,
   FiChevronLeft,
   FiChevronRight,
   FiEdit2,
+  FiEye,
+  FiFilter,
   FiMoreVertical,
+  FiRefreshCw,
   FiSearch,
   FiShield,
   FiTrash2,
   FiUser,
   FiUserPlus,
   FiUsers,
+  FiX,
 } from 'react-icons/fi'
 import { CreateUserModal, type NewUserData } from '../components/CreateUserModal'
 import { ManageUserModal, type ManagedUser } from '../components/ManageUserModal'
@@ -18,6 +23,7 @@ import { formatRelative } from '../lib/relativeTime'
 import {
   buildUserResource,
   formatPermissionLabel,
+  hasAuditReadPermission,
   initialsFromName,
   parseUserPermissions,
   parseUserRole,
@@ -29,7 +35,10 @@ import {
   updateUser,
   updateUserStatus,
 } from '../services/usersApi'
+import { listAuditLogs } from '../services/auditApi'
+import { AuditDetailModal } from '../components/AuditDetailModal'
 import type { UserDto } from '../types/user'
+import type { AuditAction, AuditEntityType, AuditLogDto } from '../types/audit'
 
 type UserStatus = 'active' | 'inactive'
 
@@ -76,10 +85,36 @@ function toPlatformUser(dto: UserDto): PlatformUser {
   }
 }
 
+const AUDIT_ACTION_CONFIG: Record<AuditAction, { label: string; bg: string; color: string }> = {
+  CREATE: { label: 'Criação', bg: '#dcfce7', color: '#15803d' },
+  UPDATE: { label: 'Atualização', bg: '#dbeafe', color: '#1d4ed8' },
+  ACTIVATE: { label: 'Ativação', bg: '#fef3c7', color: '#b45309' },
+  DEACTIVATE: { label: 'Desativação', bg: '#fee2e2', color: '#b91c1c' },
+  DELETE: { label: 'Exclusão', bg: '#fee2e2', color: '#dc2626' },
+  CONNECT: { label: 'Conexão', bg: '#ede9fe', color: '#6d28d9' },
+  DISCONNECT: { label: 'Desconexão', bg: '#f3f4f6', color: '#4b5563' },
+  SYNC: { label: 'Sincronização', bg: '#e0e7ff', color: '#4338ca' },
+  PUBLISH: { label: 'Publicação', bg: '#fef9c3', color: '#854d0e' },
+  CLOSE: { label: 'Encerramento', bg: '#f3f4f6', color: '#6b7280' },
+}
+
+const AUDIT_ENTITY_CONFIG: Record<AuditEntityType, { label: string }> = {
+  USER: { label: 'Usuário' },
+  PRODUCT: { label: 'Produto' },
+  SALE: { label: 'Venda' },
+  INTEGRATION: { label: 'Integração' },
+  LISTING: { label: 'Anúncio' },
+}
+
+const AUDIT_PAGE_SIZE = 15
+
 export function UsersScreen() {
   const { user: authUser } = useAuth()
   const systemClientId = authUser?.systemClientId ?? null
   const isAdmin = (authUser?.role?.toLowerCase() ?? parseUserRole(authUser?.resource)) === 'admin'
+  const canReadAudit = hasAuditReadPermission(authUser)
+
+  const [activeTab, setActiveTab] = useState<'users' | 'audit'>('users')
 
   const [users, setUsers] = useState<PlatformUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,6 +129,68 @@ export function UsersScreen() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+
+  // ── Audit state ──
+  const [auditLogs, setAuditLogs] = useState<AuditLogDto[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditError, setAuditError] = useState<string | null>(null)
+  const [auditOffset, setAuditOffset] = useState(0)
+  const [auditTotalElements, setAuditTotalElements] = useState(0)
+  const [auditHasNext, setAuditHasNext] = useState(false)
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogDto | null>(null)
+
+  // Filtros de Auditoria
+  const [auditUserFilter, setAuditUserFilter] = useState<string>('')
+  const [auditRoleFilter, setAuditRoleFilter] = useState<string>('')
+  const [auditActionFilter, setAuditActionFilter] = useState<string>('')
+  const [auditEntityFilter, setAuditEntityFilter] = useState<string>('')
+  const [auditFromFilter, setAuditFromFilter] = useState<string>('')
+  const [auditToFilter, setAuditToFilter] = useState<string>('')
+
+  const fetchAuditLogs = useCallback(
+    async (offsetToFetch = 0) => {
+      if (systemClientId == null || !canReadAudit) return
+      setAuditLoading(true)
+      setAuditError(null)
+      try {
+        const userIdNum = auditUserFilter ? Number(auditUserFilter) : undefined
+        const data = await listAuditLogs(systemClientId, {
+          userId: userIdNum && userIdNum > 0 ? userIdNum : undefined,
+          role: auditRoleFilter || undefined,
+          action: auditActionFilter || undefined,
+          entityType: auditEntityFilter || undefined,
+          from: auditFromFilter || undefined,
+          to: auditToFilter || undefined,
+          offset: offsetToFetch,
+          limit: AUDIT_PAGE_SIZE,
+        })
+        setAuditLogs(data.content)
+        setAuditOffset(data.offset)
+        setAuditTotalElements(data.total_elements)
+        setAuditHasNext(data.has_next)
+      } catch (e) {
+        setAuditError(e instanceof Error ? e.message : 'Erro ao carregar registros de auditoria.')
+      } finally {
+        setAuditLoading(false)
+      }
+    },
+    [
+      systemClientId,
+      canReadAudit,
+      auditUserFilter,
+      auditRoleFilter,
+      auditActionFilter,
+      auditEntityFilter,
+      auditFromFilter,
+      auditToFilter,
+    ]
+  )
+
+  useEffect(() => {
+    if (activeTab === 'audit' && canReadAudit) {
+      void fetchAuditLogs(0)
+    }
+  }, [activeTab, canReadAudit, fetchAuditLogs])
 
   const fetchUsers = useCallback(async () => {
     if (systemClientId == null) return
@@ -300,9 +397,42 @@ export function UsersScreen() {
           <h1 style={styles.title}>Gestão de usuários</h1>
           <p style={styles.subtitle}>
             Gerencie membros da equipe, funções e permissões de acesso.
+            Gerencie membros da equipe, funções, permissões de acesso e consulte o histórico de auditoria.
           </p>
         </div>
       </div>
+
+      {/* Tabs */}
+      {canReadAudit && (
+        <div style={styles.tabNav}>
+          <button
+            type="button"
+            style={{
+              ...styles.tabNavItem,
+              ...(activeTab === 'users' ? styles.tabNavItemActive : {}),
+            }}
+            onClick={() => setActiveTab('users')}
+          >
+            <FiUsers size={16} />
+            Membros da equipe
+          </button>
+          <button
+            type="button"
+            data-testid="audit-tab-button"
+            style={{
+              ...styles.tabNavItem,
+              ...(activeTab === 'audit' ? styles.tabNavItemActive : {}),
+            }}
+            onClick={() => setActiveTab('audit')}
+          >
+            <FiActivity size={16} />
+            Auditoria
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'users' ? (
+        <>
 
       {error && (
         <div style={styles.errorBanner} role="alert">
@@ -516,6 +646,350 @@ export function UsersScreen() {
         </span>
         <div style={styles.paginationBtns}>{renderPagination()}</div>
       </div>
+
+        </>
+      ) : (
+        /* ── ABA DE AUDITORIA ── */
+        <div style={styles.auditContainer} data-testid="audit-tab-panel">
+          {/* Audit Filters Bar */}
+          <div style={styles.auditFiltersBar}>
+            <div style={styles.auditFiltersTop}>
+              <div style={styles.auditFiltersTitle}>
+                <FiFilter size={16} color="#4b5563" />
+                <span style={styles.filterTitleText}>Filtros de consulta</span>
+              </div>
+              <div style={styles.auditFiltersActions}>
+                <button
+                  type="button"
+                  style={styles.auditClearBtn}
+                  onClick={() => {
+                    setAuditUserFilter('')
+                    setAuditRoleFilter('')
+                    setAuditActionFilter('')
+                    setAuditEntityFilter('')
+                    setAuditFromFilter('')
+                    setAuditToFilter('')
+                    void fetchAuditLogs(0)
+                  }}
+                >
+                  <FiX size={14} />
+                  Limpar filtros
+                </button>
+                <button
+                  type="button"
+                  style={styles.auditRefreshBtn}
+                  onClick={() => void fetchAuditLogs(auditOffset)}
+                  disabled={auditLoading}
+                  title="Atualizar lista"
+                >
+                  <FiRefreshCw size={14} />
+                  Atualizar
+                </button>
+              </div>
+            </div>
+
+            <div style={styles.auditFiltersGrid}>
+              {/* Filtro: Usuário */}
+              <div style={styles.filterField}>
+                <label style={styles.filterLabel} htmlFor="audit-user-filter">
+                  Usuário
+                </label>
+                <select
+                  id="audit-user-filter"
+                  style={styles.filterSelect}
+                  value={auditUserFilter}
+                  onChange={(e) => {
+                    setAuditUserFilter(e.target.value)
+                    setAuditOffset(0)
+                  }}
+                >
+                  <option value="">Todos os usuários</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro: Perfil */}
+              <div style={styles.filterField}>
+                <label style={styles.filterLabel} htmlFor="audit-role-filter">
+                  Perfil
+                </label>
+                <select
+                  id="audit-role-filter"
+                  style={styles.filterSelect}
+                  value={auditRoleFilter}
+                  onChange={(e) => {
+                    setAuditRoleFilter(e.target.value)
+                    setAuditOffset(0)
+                  }}
+                >
+                  <option value="">Todos os perfis</option>
+                  <option value="ADMIN">Administrador (ADMIN)</option>
+                  <option value="MANAGER">Gerente (MANAGER)</option>
+                  <option value="SELLER">Vendedor (SELLER)</option>
+                  <option value="VIEWER">Visualizador (VIEWER)</option>
+                  <option value="SYSTEM">Sistema (SYSTEM)</option>
+                </select>
+              </div>
+
+              {/* Filtro: Tipo de Ação */}
+              <div style={styles.filterField}>
+                <label style={styles.filterLabel} htmlFor="audit-action-filter">
+                  Tipo de ação
+                </label>
+                <select
+                  id="audit-action-filter"
+                  style={styles.filterSelect}
+                  value={auditActionFilter}
+                  onChange={(e) => {
+                    setAuditActionFilter(e.target.value)
+                    setAuditOffset(0)
+                  }}
+                >
+                  <option value="">Todas as ações</option>
+                  <option value="CREATE">Criação (CREATE)</option>
+                  <option value="UPDATE">Atualização (UPDATE)</option>
+                  <option value="ACTIVATE">Ativação (ACTIVATE)</option>
+                  <option value="DEACTIVATE">Desativação (DEACTIVATE)</option>
+                  <option value="DELETE">Exclusão (DELETE)</option>
+                  <option value="CONNECT">Conexão (CONNECT)</option>
+                  <option value="DISCONNECT">Desconexão (DISCONNECT)</option>
+                  <option value="SYNC">Sincronização (SYNC)</option>
+                  <option value="PUBLISH">Publicação (PUBLISH)</option>
+                  <option value="CLOSE">Encerramento (CLOSE)</option>
+                </select>
+              </div>
+
+              {/* Filtro: Tipo de Entidade */}
+              <div style={styles.filterField}>
+                <label style={styles.filterLabel} htmlFor="audit-entity-filter">
+                  Tipo de entidade
+                </label>
+                <select
+                  id="audit-entity-filter"
+                  style={styles.filterSelect}
+                  value={auditEntityFilter}
+                  onChange={(e) => {
+                    setAuditEntityFilter(e.target.value)
+                    setAuditOffset(0)
+                  }}
+                >
+                  <option value="">Todas as entidades</option>
+                  <option value="USER">Usuário (USER)</option>
+                  <option value="PRODUCT">Produto (PRODUCT)</option>
+                  <option value="SALE">Venda (SALE)</option>
+                  <option value="INTEGRATION">Integração (INTEGRATION)</option>
+                  <option value="LISTING">Anúncio (LISTING)</option>
+                </select>
+              </div>
+
+              {/* Filtro: Período Inicial */}
+              <div style={styles.filterField}>
+                <label style={styles.filterLabel} htmlFor="audit-from-filter">
+                  Período inicial
+                </label>
+                <input
+                  id="audit-from-filter"
+                  type="date"
+                  style={styles.filterInput}
+                  value={auditFromFilter}
+                  onChange={(e) => {
+                    setAuditFromFilter(e.target.value)
+                    setAuditOffset(0)
+                  }}
+                />
+              </div>
+
+              {/* Filtro: Período Final */}
+              <div style={styles.filterField}>
+                <label style={styles.filterLabel} htmlFor="audit-to-filter">
+                  Período final
+                </label>
+                <input
+                  id="audit-to-filter"
+                  type="date"
+                  style={styles.filterInput}
+                  value={auditToFilter}
+                  onChange={(e) => {
+                    setAuditToFilter(e.target.value)
+                    setAuditOffset(0)
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Erro de Auditoria */}
+          {auditError && (
+            <div style={styles.errorBanner} role="alert">
+              <span>{auditError}</span>
+              <button
+                type="button"
+                style={styles.retryBtn}
+                onClick={() => void fetchAuditLogs(auditOffset)}
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+
+          {/* Tabela de Auditoria */}
+          <div style={styles.tableWrap}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...styles.th, ...styles.thFirst }}>DATA / HORA</th>
+                    <th style={styles.th}>USUÁRIO</th>
+                    <th style={styles.th}>PERFIL</th>
+                    <th style={styles.th}>TIPO DE ATIVIDADE</th>
+                    <th style={styles.th}>ENTIDADE</th>
+                    <th style={styles.th}>DESCRIÇÃO RESUMIDA</th>
+                    <th style={{ ...styles.th, ...styles.thLast, textAlign: 'center' }}>DETALHES</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLoading && (
+                    <tr>
+                      <td colSpan={7} style={styles.emptyCell}>
+                        Carregando registros de auditoria…
+                      </td>
+                    </tr>
+                  )}
+                  {!auditLoading && auditLogs.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={styles.emptyCell}>
+                        Nenhum registro de auditoria encontrado para os critérios selecionados.
+                      </td>
+                    </tr>
+                  )}
+                  {!auditLoading &&
+                    auditLogs.map((log) => {
+                      const actionCfg =
+                        AUDIT_ACTION_CONFIG[log.action] ?? {
+                          label: log.action,
+                          bg: '#f3f4f6',
+                          color: '#374151',
+                        }
+                      const entityCfg =
+                        AUDIT_ENTITY_CONFIG[log.entity_type] ?? {
+                          label: log.entity_type,
+                        }
+
+                      const dateObj = new Date(log.created_at)
+                      const dateStr = !isNaN(dateObj.getTime())
+                        ? dateObj.toLocaleString('pt-BR', {
+                            dateStyle: 'short',
+                            timeStyle: 'medium',
+                          })
+                        : log.created_at
+
+                      return (
+                        <tr key={log.id} style={styles.tr}>
+                          <td style={{ ...styles.td, ...styles.tdFirst, whiteSpace: 'nowrap' }}>
+                            <span style={styles.auditTime}>{dateStr}</span>
+                          </td>
+                          <td style={styles.td}>
+                            <div>
+                              <span style={styles.userName}>{log.user?.name || 'Sistema'}</span>
+                              {log.user?.email && (
+                                <span style={styles.userEmail}>{log.user.email}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={styles.td}>
+                            <span style={styles.auditRoleBadge}>
+                              {log.user?.role || 'SYSTEM'}
+                            </span>
+                          </td>
+                          <td style={styles.td}>
+                            <span
+                              style={{
+                                ...styles.auditActionBadge,
+                                backgroundColor: actionCfg.bg,
+                                color: actionCfg.color,
+                              }}
+                            >
+                              {actionCfg.label}
+                            </span>
+                          </td>
+                          <td style={styles.td}>
+                            <div style={styles.entityCell}>
+                              <span style={styles.entityBadge}>{entityCfg.label}</span>
+                              {log.entity_id && (
+                                <span style={styles.entityIdText}>#{log.entity_id}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ ...styles.td, maxWidth: '280px' }}>
+                            <span style={styles.summaryText}>{log.description || '—'}</span>
+                          </td>
+                          <td style={{ ...styles.td, ...styles.tdLast, textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              style={styles.detailBtn}
+                              onClick={() => setSelectedAuditLog(log)}
+                              aria-label={`Visualizar detalhes da alteração ${log.id}`}
+                            >
+                              <FiEye size={14} />
+                              Detalhes
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Paginação da API de Auditoria */}
+          <div style={styles.pagination}>
+            <span style={styles.paginationInfo}>
+              Mostrando {auditTotalElements === 0 ? 0 : auditOffset + 1} a{' '}
+              {Math.min(auditOffset + auditLogs.length, auditTotalElements)} de{' '}
+              {auditTotalElements} eventos
+            </span>
+            <div style={styles.paginationBtns}>
+              <button
+                type="button"
+                style={{
+                  ...styles.pageBtn,
+                  ...(auditOffset <= 0 || auditLoading ? styles.pageBtnDisabled : {}),
+                }}
+                onClick={() => void fetchAuditLogs(Math.max(0, auditOffset - AUDIT_PAGE_SIZE))}
+                disabled={auditOffset <= 0 || auditLoading}
+                aria-label="Página anterior de auditoria"
+              >
+                <FiChevronLeft size={16} />
+                Anterior
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.pageBtn,
+                  ...(!auditHasNext || auditLoading ? styles.pageBtnDisabled : {}),
+                }}
+                onClick={() => void fetchAuditLogs(auditOffset + AUDIT_PAGE_SIZE)}
+                disabled={!auditHasNext || auditLoading}
+                aria-label="Próxima página de auditoria"
+              >
+                Próxima
+                <FiChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalhes de Auditoria */}
+      <AuditDetailModal
+        log={selectedAuditLog}
+        onClose={() => setSelectedAuditLog(null)}
+      />
 
       <ManageUserModal
         user={managingUser}
@@ -954,5 +1428,197 @@ const styles = {
     textAlign: 'center' as const,
     color: '#6b7280',
     fontSize: '14px',
+  },
+
+  /* Navigation Tabs */
+  tabNav: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '24px',
+    borderBottom: '1px solid #e5e7eb',
+    paddingBottom: '8px',
+  },
+  tabNavItem: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 18px',
+    borderRadius: '10px',
+    border: 'none',
+    backgroundColor: 'transparent',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 500,
+    color: '#6b7280',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  tabNavItemActive: {
+    backgroundColor: '#eff6ff',
+    color: '#2563eb',
+    fontWeight: 600,
+  },
+
+  /* Audit Container & Filters */
+  auditContainer: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '20px',
+  },
+  auditFiltersBar: {
+    backgroundColor: '#ffffff',
+    border: '1px solid #e5e7eb',
+    borderRadius: '14px',
+    padding: '18px 20px',
+  },
+  auditFiltersTop: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    marginBottom: '16px',
+    flexWrap: 'wrap' as const,
+  },
+  auditFiltersTitle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  filterTitleText: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#374151',
+  },
+  auditFiltersActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  auditClearBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    backgroundColor: '#ffffff',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#6b7280',
+    cursor: 'pointer',
+  },
+  auditRefreshBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+    backgroundColor: '#ffffff',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#2563eb',
+    cursor: 'pointer',
+  },
+  auditFiltersGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '12px',
+  },
+  filterField: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '6px',
+  },
+  filterLabel: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#4b5563',
+  },
+  filterSelect: {
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: '1px solid #d1d5db',
+    backgroundColor: '#ffffff',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    color: '#111827',
+    outline: 'none',
+  },
+  filterInput: {
+    padding: '7px 12px',
+    borderRadius: '8px',
+    border: '1px solid #d1d5db',
+    backgroundColor: '#ffffff',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    color: '#111827',
+    outline: 'none',
+  },
+
+  /* Audit Table specific badges */
+  auditTime: {
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#4b5563',
+  },
+  auditRoleBadge: {
+    display: 'inline-block',
+    padding: '3px 8px',
+    borderRadius: '6px',
+    fontSize: '11px',
+    fontWeight: 600,
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+  },
+  auditActionBadge: {
+    display: 'inline-block',
+    padding: '4px 10px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontWeight: 600,
+  },
+  entityCell: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    flexWrap: 'wrap' as const,
+  },
+  entityBadge: {
+    display: 'inline-block',
+    padding: '2px 8px',
+    borderRadius: '6px',
+    fontSize: '11px',
+    fontWeight: 600,
+    backgroundColor: '#ede9fe',
+    color: '#6d28d9',
+  },
+  entityIdText: {
+    fontSize: '12px',
+    color: '#6b7280',
+    fontFamily: 'monospace',
+  },
+  summaryText: {
+    display: 'block',
+    fontSize: '13px',
+    color: '#374151',
+    lineHeight: 1.4,
+  },
+  detailBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    borderRadius: '8px',
+    border: '1px solid #dbeafe',
+    backgroundColor: '#eff6ff',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#1d4ed8',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s ease',
   },
 } as const

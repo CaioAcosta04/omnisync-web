@@ -26,10 +26,32 @@ const PERMISSION_LABELS: Record<string, string> = {
   'Anúncios': 'Anúncios',
   'Vendas': 'Vendas',
   'Somente leitura': 'Somente leitura',
+  'AUDIT_READ': 'Auditoria',
+  'Auditoria': 'Auditoria',
 }
 
 export function formatPermissionLabel(permission: string): string {
   return PERMISSION_LABELS[permission] ?? permission
+}
+
+export function hasAuditReadPermission(
+  user: { role?: string; permissions?: string[]; resource?: Record<string, unknown> | null } | null | undefined
+): boolean {
+  if (!user) return false
+  const role = (user.role ?? (user.resource?.role as string) ?? '').toLowerCase()
+  if (role === 'admin') return true
+
+  const perms = Array.isArray(user.permissions)
+    ? user.permissions
+    : Array.isArray(user.resource?.permissions)
+    ? (user.resource?.permissions as string[])
+    : []
+
+  return perms.some(
+    (p) =>
+      typeof p === 'string' &&
+      (p.toUpperCase() === 'AUDIT_READ' || p.toUpperCase() === 'PERM_AUDIT_READ' || p === 'Auditoria')
+  )
 }
 
 export function parseUserRole(resource: Record<string, unknown> | null | undefined): UserRole {
