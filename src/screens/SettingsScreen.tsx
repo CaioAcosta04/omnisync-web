@@ -75,9 +75,9 @@ function ProfileSection() {
         </div>
 
         <div style={s.cardActions}>
-          <button type="button" style={s.btnPrimary} onClick={() => console.log('Profile saved:', { name, email })}>
+          <button type="button" style={s.btnDisabled} disabled>
             <FiSave size={16} />
-            Salvar Alterações
+            Salvar Alterações — Em breve
           </button>
         </div>
         <div style={s.divLogout}>
@@ -93,44 +93,28 @@ function ProfileSection() {
 /* ─── Store Section ─── */
 
 function StoreSection() {
-  const [storeName, setStoreName] = useState('OmniSync LTDA')
-  const [cnpj, setCnpj] = useState('12.345.678/0001-90')
-
   return (
     <div style={s.sectionColumn}>
       <div style={s.card}>
         <h3 style={s.cardTitle}>Dados da Loja</h3>
-        <p style={s.cardDesc}>Informações da sua empresa cadastrada no OmniSync.</p>
+        <p style={s.cardDesc}>
+          Edição dos dados da empresa cadastrada no OmniSync estará disponível em breve.
+        </p>
 
         <div style={s.fieldGroup}>
           <label style={s.label}>Nome da Empresa</label>
-          <input
-            style={s.input}
-            value={storeName}
-            onChange={(e) => setStoreName(e.target.value)}
-            placeholder="Nome da empresa"
-          />
+          <input style={s.input} placeholder="Nome da empresa" disabled />
         </div>
 
         <div style={s.fieldGroup}>
           <label style={s.label}>CNPJ</label>
-          <input
-            style={s.input}
-            value={cnpj}
-            onChange={(e) => setCnpj(e.target.value)}
-            placeholder="00.000.000/0000-00"
-          />
-        </div>
-
-        <div style={s.fieldGroup}>
-          <label style={s.label}>Criado em</label>
-          <div style={s.readOnlyField}>15 de Março de 2026</div>
+          <input style={s.input} placeholder="00.000.000/0000-00" disabled />
         </div>
 
         <div style={s.cardActions}>
-          <button type="button" style={s.btnPrimary} onClick={() => console.log('Store saved:', { storeName, cnpj })}>
+          <button type="button" style={s.btnDisabled} disabled>
             <FiSave size={16} />
-            Salvar Alterações
+            Salvar Alterações — Em breve
           </button>
         </div>
       </div>
@@ -205,9 +189,9 @@ function AppearanceSection() {
     { id: 'system', label: 'Sistema', icon: <FiMonitor size={22} />, available: false },
   ]
 
-  const langOptions: { id: LangOption; label: string; flag: string }[] = [
-    { id: 'pt', label: 'Português', flag: '🇧🇷' },
-    { id: 'en', label: 'English', flag: '🇺🇸' },
+  const langOptions: { id: LangOption; label: string; flag: string; available: boolean }[] = [
+    { id: 'pt', label: 'Português', flag: '🇧🇷', available: true },
+    { id: 'en', label: 'English', flag: '🇺🇸', available: false },
   ]
 
   return (
@@ -249,17 +233,20 @@ function AppearanceSection() {
             <button
               key={opt.id}
               type="button"
-              onClick={() => setLang(opt.id)}
+              onClick={() => opt.available && setLang(opt.id)}
               style={{
                 ...s.langCard,
                 borderColor: lang === opt.id ? '#6d28d9' : '#e5e7eb',
                 backgroundColor: lang === opt.id ? '#f5f3ff' : '#ffffff',
+                opacity: opt.available ? 1 : 0.5,
+                cursor: opt.available ? 'pointer' : 'not-allowed',
               }}
             >
               <span style={{ fontSize: '24px' }}>{opt.flag}</span>
               <span style={{ fontSize: '14px', fontWeight: 600, color: lang === opt.id ? '#6d28d9' : '#374151' }}>
                 {opt.label}
               </span>
+              {!opt.available && <span style={s.comingSoon}>Em breve</span>}
             </button>
           ))}
         </div>
