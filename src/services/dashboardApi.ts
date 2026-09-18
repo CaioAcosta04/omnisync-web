@@ -82,16 +82,7 @@ export async function getDashboardSummary(
   range: DashboardRange = '7d',
 ): Promise<DashboardSummary> {
   const url = `/api/dashboard/${systemClientId}/summary?range=${range}`
-  console.log('[dashboard] GET', url)
   const res = await apiFetch(url)
-  if (!res.ok) {
-    // throwApiError também loga o corpo completo do erro em [apiError].
-    console.error('[dashboard] summary HTTP error', { url, status: res.status })
-    await throwApiError(res, 'Não foi possível carregar o painel.')
-  }
-  const raw = (await res.json()) as unknown
-  console.log('[dashboard] summary RAW response', raw)
-  const normalized = normalizeDashboardSummary(raw)
-  console.log('[dashboard] summary NORMALIZED', normalized)
-  return normalized
+  if (!res.ok) await throwApiError(res, 'Não foi possível carregar o painel.')
+  return normalizeDashboardSummary(await res.json())
 }

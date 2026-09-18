@@ -8,6 +8,7 @@ import {
   FiClock,
   FiCornerUpLeft,
   FiDollarSign,
+  FiFileText,
   FiPackage,
   FiRefreshCw,
   FiShoppingBag,
@@ -15,6 +16,7 @@ import {
 } from 'react-icons/fi'
 import type { ReactNode } from 'react'
 import { ActivityEmptyState } from '../components/ActivityEmptyState'
+import { GenerateReportModal } from '../components/GenerateReportModal'
 import { useAppNavigation } from '../contexts/AppNavigationContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
@@ -99,6 +101,10 @@ export function DashboardScreen() {
   const [range, setRange] = useState<DashboardRange>('7d')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+
+  const openReport = useCallback(() => setReportModalOpen(true), [])
+  const closeReport = useCallback(() => setReportModalOpen(false), [])
 
   const load = useCallback(
     async (selectedRange: DashboardRange) => {
@@ -112,24 +118,9 @@ export function DashboardScreen() {
         listProducts(systemClientId, 0, SOURCE_PAGE_SIZE),
       ])
 
-      console.log('[dashboard] load results', {
-        systemClientId,
-        range: selectedRange,
-        summary: summaryResult.status,
-        sales: salesResult.status,
-        products: productsResult.status,
-      })
-      if (salesResult.status === 'rejected') {
-        console.error('[dashboard] listSales failed (atividade recente vazia)', salesResult.reason)
-      }
-      if (productsResult.status === 'rejected') {
-        console.error('[dashboard] listProducts failed (estoque baixo = 0)', productsResult.reason)
-      }
-
       // KPIs + gráfico são o núcleo: se o /summary falha, a tela mostra erro.
       if (summaryResult.status !== 'fulfilled') {
         const reason = summaryResult.reason
-        console.error('[dashboard] summary FAILED → tela de erro', reason)
         setError(reason instanceof Error ? reason.message : 'Não foi possível carregar o painel.')
         setLoading(false)
         return
@@ -149,13 +140,6 @@ export function DashboardScreen() {
         .slice(0, RECENT_LIMIT)
         .map((sale) => saleToActivity(sale, productNames))
       setRecentActivity(recent)
-
-      console.log('[dashboard] derived', {
-        products: products.length,
-        lowStockCount: products.filter((p) => availableQty(p) < LOW_STOCK_THRESHOLD).length,
-        salesFetched: sales.length,
-        recentActivityShown: recent.length,
-      })
 
       setLoading(false)
     },
@@ -217,12 +201,27 @@ export function DashboardScreen() {
     )
   }, [summary, lowStockCount, recentActivity])
 
+  const reportModal = (
+    <GenerateReportModal
+      key="generate-report-modal"
+      open={reportModalOpen}
+      onClose={closeReport}
+      systemClientId={systemClientId}
+    />
+  )
+
   // ── Loading ──
   if (loading) {
     return (
       <div style={styles.page}>
-        <DashboardHeader onSync={handleSync} isSyncing={isSyncing} disabled />
+        <DashboardHeader
+          onSync={handleSync}
+          isSyncing={isSyncing}
+          onGenerateReport={openReport}
+          disabled
+        />
         <DashboardSkeleton />
+        {reportModal}
       </div>
     )
   }
@@ -231,7 +230,12 @@ export function DashboardScreen() {
   if (error) {
     return (
       <div style={styles.page}>
-        <DashboardHeader onSync={handleSync} isSyncing={isSyncing} disabled />
+        <DashboardHeader
+          onSync={handleSync}
+          isSyncing={isSyncing}
+          onGenerateReport={openReport}
+          disabled
+        />
         <div style={styles.errorPanel} role="alert">
           <span style={styles.errorIcon}>
             <FiAlertCircle size={22} />
@@ -243,6 +247,7 @@ export function DashboardScreen() {
             Tentar novamente
           </button>
         </div>
+        {reportModal}
       </div>
     )
   }
@@ -251,7 +256,7 @@ export function DashboardScreen() {
 
   return (
     <div style={styles.page}>
-      <DashboardHeader onSync={handleSync} isSyncing={isSyncing} />
+      <DashboardHeader onSync={handleSync} isSyncing={isSyncing} onGenerateReport={openReport} />
 
       <section style={styles.kpiGrid}>
         {kpiCards.map((card) => (
@@ -395,6 +400,7 @@ export function DashboardScreen() {
           </aside>
         </section>
       )}
+      {reportModal}
     </div>
   )
 }
@@ -404,10 +410,12 @@ export function DashboardScreen() {
 function DashboardHeader({
   onSync,
   isSyncing,
+  onGenerateReport,
   disabled = false,
 }: {
   onSync: () => void
   isSyncing: boolean
+  onGenerateReport: () => void
   disabled?: boolean
 }) {
   return (
@@ -417,6 +425,10 @@ function DashboardHeader({
         <p style={styles.pageSubtitle}>Métricas de estoque e sincronização em tempo real.</p>
       </div>
       <div style={styles.headerActions}>
+        <button type="button" style={styles.btnSecondary} onClick={onGenerateReport}>
+          <FiFileText size={15} />
+          Gerar relatório
+        </button>
         <button
           type="button"
           style={{ ...styles.btnPrimary, ...(isSyncing || disabled ? styles.btnDisabled : {}) }}
@@ -529,6 +541,21 @@ const styles = {
     padding: '0 16px',
     backgroundColor: '#5664f5',
     color: '#ffffff',
+    fontSize: '13px',
+    fontWeight: 600,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+  },
+  btnSecondary: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    borderRadius: '10px',
+    height: '38px',
+    padding: '0 16px',
+    backgroundColor: '#ffffff',
+    color: '#1e293b',
+    border: '1px solid #e2e8f0',
     fontSize: '13px',
     fontWeight: 600,
     fontFamily: 'inherit',
