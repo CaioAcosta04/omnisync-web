@@ -4,6 +4,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiDownload,
+  FiFileText,
   FiPlus,
   FiSearch,
   FiSliders,
@@ -11,6 +12,7 @@ import {
   FiTrendingUp,
 } from 'react-icons/fi'
 import { AddProductModal, type NewProductData } from '../components/AddProductModal'
+import { GenerateReportModal } from '../components/GenerateReportModal'
 import { ProductDetailDialog } from '../components/ProductDetailDialog'
 import { ProductImageThumb } from '../components/ProductImageThumb'
 import { StockEmptyState } from '../components/StockEmptyState'
@@ -92,6 +94,7 @@ export function StockScreen() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -357,6 +360,10 @@ export function StockScreen() {
             <FiSliders size={16} />
             Filtros
           </button>
+          <button type="button" style={styles.exportBtn} onClick={() => setReportOpen(true)}>
+            <FiFileText size={16} />
+            Gerar relatório
+          </button>
           <button type="button" style={styles.exportBtn}>
             <FiDownload size={16} />
             Exportar CSV
@@ -518,6 +525,13 @@ export function StockScreen() {
           onChanged={() => void fetchProducts()}
         />
       )}
+
+      <GenerateReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        systemClientId={systemClientId}
+        defaultType="INVENTORY"
+      />
     </div>
   )
 }

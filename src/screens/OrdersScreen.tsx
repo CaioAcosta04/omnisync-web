@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   FiChevronLeft,
   FiChevronRight,
+  FiFileText,
   FiPlus,
   FiSearch,
   FiShoppingBag,
@@ -10,6 +11,7 @@ import {
   RegisterLocalSaleModal,
   type LocalSaleFormData,
 } from '../components/RegisterLocalSaleModal'
+import { GenerateReportModal } from '../components/GenerateReportModal'
 import { useAuth } from '../contexts/AuthContext'
 import { parseUserRole } from '../lib/userResource'
 import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
@@ -78,6 +80,7 @@ export function OrdersScreen() {
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [showRegisterModal, setShowRegisterModal] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -327,19 +330,25 @@ export function OrdersScreen() {
             Registre vendas da loja física e acompanhe o histórico
           </p>
         </div>
-        {canWrite && (
-          <button
-            type="button"
-            style={styles.primaryBtn}
-            onClick={() => {
-              setSubmitError(null)
-              setShowRegisterModal(true)
-            }}
-          >
-            <FiPlus size={18} />
-            Registrar venda
+        <div style={styles.headerActions}>
+          <button type="button" style={styles.reportBtn} onClick={() => setReportOpen(true)}>
+            <FiFileText size={16} />
+            Gerar relatório
           </button>
-        )}
+          {canWrite && (
+            <button
+              type="button"
+              style={styles.primaryBtn}
+              onClick={() => {
+                setSubmitError(null)
+                setShowRegisterModal(true)
+              }}
+            >
+              <FiPlus size={18} />
+              Registrar venda
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={styles.tabs}>
@@ -480,6 +489,13 @@ export function OrdersScreen() {
           }
         }}
         onSubmit={handleRegisterSale}
+      />
+
+      <GenerateReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        systemClientId={systemClientId}
+        defaultType="SALES"
       />
     </div>
   )
@@ -629,6 +645,28 @@ const styles = {
   },
   sectionTitle: { fontSize: '22px', fontWeight: 700, color: '#111827', margin: 0 },
   sectionSubtitle: { fontSize: '14px', color: '#6b7280', marginTop: '4px' },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap' as const,
+    flexShrink: 0,
+  },
+  reportBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 18px',
+    borderRadius: '10px',
+    border: '1px solid #e5e7eb',
+    backgroundColor: '#ffffff',
+    color: '#374151',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
   primaryBtn: {
     display: 'inline-flex',
     alignItems: 'center',

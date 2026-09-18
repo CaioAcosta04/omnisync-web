@@ -5,6 +5,7 @@ import {
   FiChevronRight,
   FiClock,
   FiExternalLink,
+  FiFileText,
   FiPlus,
   FiRefreshCw,
   FiSearch,
@@ -17,6 +18,7 @@ import { getProductImageUrl } from '../lib/productImage'
 import { hasMercadoLivreListing } from '../lib/productMercadoLivre'
 import { readMercadoLivreIntegration } from '../lib/mercadoLivreStorage'
 import { AnnounceProductModal } from '../components/AnnounceProductModal'
+import { GenerateReportModal } from '../components/GenerateReportModal'
 import { ProductImageThumb } from '../components/ProductImageThumb'
 import { ProductDetailDialog } from '../components/ProductDetailDialog'
 import { SelectProductToAnnounceModal } from '../components/SelectProductToAnnounceModal'
@@ -113,6 +115,7 @@ export function ListingsScreen() {
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
   const [showSelectProductModal, setShowSelectProductModal] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [announceTarget, setAnnounceTarget] = useState<ProductDto | null>(null)
   const [announceSubmitting, setAnnounceSubmitting] = useState(false)
   const [announceError, setAnnounceError] = useState<string | null>(null)
@@ -365,6 +368,10 @@ export function ListingsScreen() {
             </p>
           </div>
         </div>
+        <button type="button" style={styles.reportBtn} onClick={() => setReportOpen(true)}>
+          <FiFileText size={16} />
+          Gerar relatório
+        </button>
       </div>
 
       {/* Error banner */}
@@ -669,6 +676,13 @@ export function ListingsScreen() {
           errorMessage={announceError}
         />
       )}
+
+      <GenerateReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        systemClientId={systemClientId}
+        defaultType="LISTINGS"
+      />
     </div>
   )
 }
@@ -769,11 +783,31 @@ const styles = {
   /* Header */
   header: {
     marginBottom: '28px',
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: '16px',
+    flexWrap: 'wrap' as const,
   },
   headerLeft: {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
+  },
+  reportBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 18px',
+    borderRadius: '10px',
+    border: '1px solid #e5e7eb',
+    backgroundColor: '#ffffff',
+    color: '#374151',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
   },
   mlLogoWrap: {
     padding: '8px 12px',
