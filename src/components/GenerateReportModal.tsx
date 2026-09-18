@@ -15,6 +15,8 @@ type GenerateReportModalProps = {
   open: boolean
   onClose: () => void
   systemClientId: number | null
+  /** Tipo pré-selecionado ao abrir (ex.: 'INVENTORY' quando aberto pela tela de Estoque). */
+  defaultType?: ReportTypeId
 }
 
 const REPORT_TYPES: ReportTypeId[] = ['SALES', 'INVENTORY', 'LISTINGS']
@@ -34,9 +36,14 @@ function allFieldsOf(type: ReportTypeId): Set<string> {
   return new Set(REPORT_FIELDS[type].map((f) => f.key))
 }
 
-export function GenerateReportModal({ open, onClose, systemClientId }: GenerateReportModalProps) {
-  const [reportType, setReportType] = useState<ReportTypeId>('SALES')
-  const [selectedFields, setSelectedFields] = useState<Set<string>>(() => allFieldsOf('SALES'))
+export function GenerateReportModal({
+  open,
+  onClose,
+  systemClientId,
+  defaultType = 'SALES',
+}: GenerateReportModalProps) {
+  const [reportType, setReportType] = useState<ReportTypeId>(defaultType)
+  const [selectedFields, setSelectedFields] = useState<Set<string>>(() => allFieldsOf(defaultType))
   const [marketplaces, setMarketplaces] = useState<Set<string>>(new Set())
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -44,18 +51,18 @@ export function GenerateReportModal({ open, onClose, systemClientId }: GenerateR
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  // Reinicia o formulário sempre que o modal abre.
+  // Reinicia o formulário sempre que o modal abre, no tipo padrão da tela de origem.
   useEffect(() => {
     if (!open) return
-    setReportType('SALES')
-    setSelectedFields(allFieldsOf('SALES'))
+    setReportType(defaultType)
+    setSelectedFields(allFieldsOf(defaultType))
     setMarketplaces(new Set())
     setStart(daysAgoIso(29))
     setEnd(todayIso())
     setLoading(false)
     setError(null)
     setSuccess(false)
-  }, [open])
+  }, [open, defaultType])
 
   const handleTypeChange = useCallback((type: ReportTypeId) => {
     setReportType(type)
