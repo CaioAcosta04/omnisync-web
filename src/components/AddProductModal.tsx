@@ -27,6 +27,7 @@ export type NewProductData = {
   price: number
   stock: number
   reservedStock: number
+  minimumStock: number
   announcement: boolean
   imageResource?: Array<{ url: string }>
   mlMetadata?: MercadoLivreProductMetadata
@@ -59,6 +60,8 @@ function validateBase(form: BaseFields): BaseErrors {
   if (!form.description.trim()) errors.description = 'Descrição é obrigatória.'
   if (form.price < 0) errors.price = 'Preço não pode ser negativo.'
   if (form.stock < 0) errors.stock = 'Estoque não pode ser negativo.'
+  if (!Number.isInteger(form.minimumStock) || form.minimumStock < 0)
+    errors.minimumStock = 'Estoque mínimo deve ser um número inteiro maior ou igual a zero.'
   if (form.reservedStock < 0) errors.reservedStock = 'Estoque reservado não pode ser negativo.'
   else if (form.reservedStock > form.stock)
     errors.reservedStock = 'Estoque reservado não pode ser maior que o total.'
@@ -86,7 +89,15 @@ function validateMl(
   return errors
 }
 
-const INITIAL_BASE: BaseFields = { name: '', sku: '', description: '', price: 0, stock: 0, reservedStock: 0 }
+const INITIAL_BASE: BaseFields = {
+  name: '',
+  sku: '',
+  description: '',
+  price: 0,
+  stock: 0,
+  reservedStock: 0,
+  minimumStock: 0,
+}
 
 export function AddProductModal({
   open,
@@ -447,6 +458,25 @@ export function AddProductModal({
                 />
               </div>
               {baseErrors.reservedStock && <span style={styles.errorMsg}>{baseErrors.reservedStock}</span>}
+            </div>
+            <div style={{ ...styles.field, flex: 1 }}>
+              <label style={styles.label} htmlFor="product-minimum-stock">
+                Estoque mínimo
+              </label>
+              <div style={{ ...styles.inputWrap, ...(baseErrors.minimumStock ? styles.inputWrapError : {}) }}>
+                <input
+                  id="product-minimum-stock"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="0"
+                  value={form.minimumStock}
+                  onChange={(e) => set('minimumStock', Number(e.target.value))}
+                  onBlur={() => markTouched('minimumStock')}
+                  style={styles.input}
+                />
+              </div>
+              {baseErrors.minimumStock && <span style={styles.errorMsg}>{baseErrors.minimumStock}</span>}
             </div>
           </div>
 

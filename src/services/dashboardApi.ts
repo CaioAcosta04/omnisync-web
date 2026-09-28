@@ -6,10 +6,9 @@ import { apiFetch } from '../lib/apiFetch'
  *
  * Consome `GET /api/dashboard/{systemClientId}/summary?range=7d|30d`.
  *
- * O endpoint devolve KPIs (com variação % vs. período anterior) e a série de
- * vendas por dia. Ele NÃO devolve "estoque baixo" nem "atividade recente" —
- * esses dois blocos da tela são montados no front reaproveitando `productsApi`
- * e `salesApi` (mesmas fontes de Estoque e Vendas), então os valores batem.
+ * O endpoint devolve KPIs (com variação % vs. período anterior), a série de
+ * vendas por dia e os eventos recentes. Os itens de estoque baixo são carregados
+ * sob demanda pelo endpoint paginado de produtos.
  *
  * Semânticas (definidas pelo backend em DashboardService):
  * - totalStock:     soma de `stock` dos produtos ativos (unidades).
@@ -37,11 +36,23 @@ export type DashboardSummary = {
   totalProductsChangePct: number
   totalStock: number
   totalStockChangePct: number
+  inventoryValue: number
   activeListings: number
   activeListingsChangePct: number
   revenueToday: number
   revenueTodayChangePct: number
+  salesTodayCount: number
+  lowStockCount: number
   salesByDay: DashboardSalesDay[]
+  recentEvents: DashboardRecentEvent[]
+}
+
+export type DashboardRecentEvent = {
+  id: string
+  entityType: string
+  entityId: number
+  action: string
+  createdAt: string
 }
 
 function toNumber(value: unknown): number {
@@ -61,6 +72,20 @@ function normalizeSalesByDay(raw: unknown): DashboardSalesDay[] {
   })
 }
 
+function normalizeRecentEvents(raw: unknown): DashboardRecentEvent[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map((item, index) => {
+    const event = (item ?? {}) as Record<string, unknown>
+    return {
+      id: typeof event.id === 'string' ? event.id : String(index),
+      entityType: typeof event.entityType === 'string' ? event.entityType : 'UNKNOWN',
+      entityId: toNumber(event.entityId),
+      action: typeof event.action === 'string' ? event.action : '',
+      createdAt: typeof event.createdAt === 'string' ? event.createdAt : '',
+    }
+  })
+}
+
 /** Converte o payload cru da API no shape seguro consumido pela tela. */
 export function normalizeDashboardSummary(raw: unknown): DashboardSummary {
   const r = (raw ?? {}) as Record<string, unknown>
@@ -69,11 +94,15 @@ export function normalizeDashboardSummary(raw: unknown): DashboardSummary {
     totalProductsChangePct: toNumber(r.totalProductsChangePct),
     totalStock: toNumber(r.totalStock),
     totalStockChangePct: toNumber(r.totalStockChangePct),
+    inventoryValue: toNumber(r.inventoryValue),
     activeListings: toNumber(r.activeListings),
     activeListingsChangePct: toNumber(r.activeListingsChangePct),
     revenueToday: toNumber(r.revenueToday),
     revenueTodayChangePct: toNumber(r.revenueTodayChangePct),
+    salesTodayCount: toNumber(r.salesTodayCount),
+    lowStockCount: toNumber(r.lowStockCount),
     salesByDay: normalizeSalesByDay(r.salesByDay),
+    recentEvents: normalizeRecentEvents(r.recentEvents),
   }
 }
 

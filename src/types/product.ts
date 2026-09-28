@@ -5,6 +5,9 @@ export type ProductDto = {
   description: string
   stock: number
   reserved_stock: number
+  minimum_stock: number
+  available_stock?: number
+  low_stock?: boolean
   price: number
   resource: Record<string, unknown> | null
   system_client_id: number
@@ -42,7 +45,16 @@ export type ProductCreateRequest = {
   description: string
   stock: number
   reserved_stock: number
+  minimum_stock: number
   price: number
   announcement: boolean
   resource: Record<string, unknown>
+}
+
+export type LowStockProductsResponse = {
+  content: ProductDto[]
+  offset: number
+  limit: number
+  total_elements: number
+  has_next: boolean
 }

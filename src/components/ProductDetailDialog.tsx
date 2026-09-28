@@ -36,6 +36,7 @@ type EditFields = {
   description: string
   stock: string
   reserved_stock: string
+  minimum_stock: string
   price: string
 }
 
@@ -54,6 +55,7 @@ function toEditFields(p: ProductDto): EditFields {
     description: p.description,
     stock: String(p.stock),
     reserved_stock: String(p.reserved_stock),
+    minimum_stock: String(p.minimum_stock ?? 0),
     price: String(p.price),
   }
 }
@@ -70,6 +72,9 @@ function validateEdit(fields: EditFields): string | null {
   if (Number.isNaN(reserved) || reserved < 0 || !Number.isInteger(reserved))
     return 'Estoque reservado inválido.'
   if (reserved > stock) return 'Estoque reservado não pode ser maior que o total.'
+  const minimumStock = Number(fields.minimum_stock)
+  if (Number.isNaN(minimumStock) || minimumStock < 0 || !Number.isInteger(minimumStock))
+    return 'Estoque mínimo deve ser um número inteiro maior ou igual a zero.'
   return null
 }
 
@@ -170,6 +175,7 @@ export function ProductDetailDialog({
         description: editFields.description.trim(),
         stock: Number(editFields.stock),
         reserved_stock: Number(editFields.reserved_stock),
+        minimum_stock: Number(editFields.minimum_stock),
         price: Number(editFields.price),
       })
       const updated = await updateProduct(systemClientId, product.id, payload)
@@ -197,6 +203,7 @@ export function ProductDetailDialog({
           description: product.description,
           stock: product.stock,
           reserved_stock: product.reserved_stock,
+          minimum_stock: product.minimum_stock ?? 0,
           price: product.price,
         },
         status
@@ -372,6 +379,21 @@ export function ProductDetailDialog({
                   />
                 ) : (
                   `${product.reserved_stock} un.`
+                )}
+              </InfoField>
+              <InfoField label="Estoque mínimo">
+                {editing ? (
+                  <input
+                    style={styles.input}
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={editFields.minimum_stock}
+                    onChange={(e) => setEditFields({ ...editFields, minimum_stock: e.target.value })}
+                    disabled={submitting}
+                  />
+                ) : (
+                  `${product.minimum_stock ?? 0} un.`
                 )}
               </InfoField>
               <InfoField label="Disponível">{availableQty} un.</InfoField>
@@ -612,7 +634,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
+    zIndex: 1100,
     padding: '24px',
   },
   modal: {

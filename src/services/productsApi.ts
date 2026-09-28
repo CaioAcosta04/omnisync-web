@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/apiFetch'
 import type {
   MercadoLivreProductMetadata,
   MercadoLivreSyncResponse,
+  LowStockProductsResponse,
   PageResponse,
   ProductCreateRequest,
   ProductDto,
@@ -18,6 +19,18 @@ export async function listProducts(
   )
   if (!res.ok) await throwApiError(res, 'Não foi possível carregar os produtos.')
   return (await res.json()) as PageResponse<ProductDto>
+}
+
+export async function listLowStockProducts(
+  systemClientId: number,
+  offset = 0,
+  limit = 10,
+): Promise<LowStockProductsResponse> {
+  const res = await apiFetch(
+    `/api/products/${systemClientId}/low-stock?offset=${offset}&limit=${limit}`,
+  )
+  if (!res.ok) await throwApiError(res, 'Não foi possível carregar os itens com estoque baixo.')
+  return (await res.json()) as LowStockProductsResponse
 }
 
 export async function syncMercadoLivreProducts(

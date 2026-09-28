@@ -30,6 +30,7 @@ export function buildProductUpdatePayload(
     description: string
     stock: number
     reserved_stock: number
+    minimum_stock: number
     price: number
   },
   mlStatus?: 'active' | 'paused'
