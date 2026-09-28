@@ -55,9 +55,9 @@ const STATUS_CONFIG: Record<ProductStatus, { label: string; bg: string; color: s
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
-function deriveStatus(availableQty: number): ProductStatus {
+function deriveStatus(availableQty: number, lowStock: boolean): ProductStatus {
   if (availableQty === 0) return 'out_of_stock'
-  if (availableQty < 10) return 'low_stock'
+  if (lowStock) return 'low_stock'
   return 'healthy'
 }
 
@@ -75,7 +75,7 @@ function toTableRow(p: ProductDto): TableRow {
     availableQty,
     marketplaces,
     lastUpdate: formatRelative(p.created_at),
-    status: deriveStatus(availableQty),
+    status: deriveStatus(availableQty, p.low_stock ?? availableQty <= (p.minimum_stock ?? 0)),
   }
 }
 
@@ -144,6 +144,7 @@ export function StockScreen() {
         description: data.description,
         stock: data.stock,
         reserved_stock: data.reservedStock,
+        minimum_stock: data.minimumStock,
         price: data.price,
         announcement: data.announcement && hasMLMetadata,
         resource,

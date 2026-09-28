@@ -54,6 +54,37 @@ export function hasAuditReadPermission(
   )
 }
 
+export function hasProductReadPermission(
+  user:
+    | {
+        role?: string
+        permissions?: string[]
+        resource?: Record<string, unknown> | null
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!user) return false
+  const resource = user.resource ?? null
+  const role = (user.role ?? (resource?.role as string) ?? '').toLowerCase()
+  const explicitPermissions = Array.isArray(user.permissions)
+    ? user.permissions
+    : Array.isArray(resource?.permissions)
+      ? (resource.permissions as string[])
+      : null
+
+  if (explicitPermissions == null) return ['admin', 'manager', 'seller', 'editor', 'viewer'].includes(role)
+
+  return explicitPermissions.some((permission) => {
+    const normalized = permission.trim().toUpperCase()
+    return (
+      normalized === 'PRODUCT_READ' ||
+      normalized === 'PERM_PRODUCT_READ' ||
+      ['GESTÃO DE ESTOQUE', 'STOCK MANAGEMENT', 'ANÚNCIOS', 'LISTINGS', 'ATIVIDADE', 'ACTIVITY', 'SOMENTE LEITURA', 'VIEW ONLY', 'ACESSO TOTAL', 'FULL ACCESS'].includes(normalized)
+    )
+  })
+}
+
 export function parseUserRole(resource: Record<string, unknown> | null | undefined): UserRole {
   const raw = resource?.role
   if (typeof raw === 'string') {

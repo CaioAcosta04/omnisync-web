@@ -17,14 +17,15 @@ import {
 import type { ReactNode } from 'react'
 import { ActivityEmptyState } from '../components/ActivityEmptyState'
 import { GenerateReportModal } from '../components/GenerateReportModal'
+import { LowStockProductsModal } from '../components/LowStockProductsModal'
+import { ProductDetailDialog } from '../components/ProductDetailDialog'
 import { useAppNavigation } from '../contexts/AppNavigationContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { formatRelative } from '../lib/relativeTime'
+import { hasProductReadPermission } from '../lib/userResource'
 import { getDashboardSummary, type DashboardRange, type DashboardSummary } from '../services/dashboardApi'
-import { listProducts } from '../services/productsApi'
-import { listSales } from '../services/salesApi'
-import type { SaleDto } from '../types/sale'
+import type { ProductDto } from '../types/product'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -33,12 +34,8 @@ const NUM = new Intl.NumberFormat('pt-BR')
 const PCT = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 const WEEKDAY = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' })
 
-/** Mesmo critério do Estoque: disponível (stock - reservado) abaixo disso é alerta. */
-const LOW_STOCK_THRESHOLD = 10
 /** Quantos eventos mostrar no painel de atividade recente. */
 const RECENT_LIMIT = 6
-/** Página buscada em Vendas/Produtos para derivar atividade e estoque baixo. */
-const SOURCE_PAGE_SIZE = 200
 
 const RANGE_OPTIONS: { id: DashboardRange; label: string }[] = [
   { id: '7d', label: '7 dias' },
@@ -47,7 +44,7 @@ const RANGE_OPTIONS: { id: DashboardRange; label: string }[] = [
 
 type ActivityRowData = {
   id: string
-  type: 'order' | 'return'
+  type: 'order' | 'return' | 'product'
   title: string
   description: string
   createdAt: string
@@ -56,6 +53,7 @@ type ActivityRowData = {
 const ACTIVITY_STYLE: Record<ActivityRowData['type'], { icon: ReactNode; bg: string; color: string }> = {
   order: { icon: <FiShoppingCart size={14} />, bg: '#dcfce7', color: '#16a34a' },
   return: { icon: <FiCornerUpLeft size={14} />, bg: '#fee2e2', color: '#dc2626' },
+  product: { icon: <FiPackage size={14} />, bg: '#e0e7ff', color: '#4f46e5' },
 }
 
 function formatPercent(value: number): string {
@@ -71,19 +69,20 @@ function weekdayLabel(dateStr: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
-function availableQty(p: { stock: number; reserved_stock: number }): number {
-  return Math.max(0, p.stock - p.reserved_stock)
-}
-
-function saleToActivity(sale: SaleDto, productNames: Record<number, string>): ActivityRowData {
-  const cancelled = sale.status === 'CANCELLED'
-  const name = productNames[sale.product_id] ?? `Produto #${sale.product_id}`
+function eventToActivity(event: DashboardSummary['recentEvents'][number]): ActivityRowData {
+  const productEvent = event.entityType.toUpperCase() === 'PRODUCT'
+  const action = event.action.toUpperCase()
+  const cancelled = !productEvent && action.includes('CANCEL')
+  const entity = productEvent ? 'Produto' : 'Venda'
+  const actionLabel = productEvent
+    ? ({ create: 'criado', edit: 'atualizado', delete: 'removido' }[action.toLowerCase()] ?? 'atualizado')
+    : ({ CREATED: 'criada', UPDATED: 'atualizada', CANCELLED: 'cancelada' }[action] ?? 'atualizada')
   return {
-    id: `sale-${sale.id}`,
-    type: cancelled ? 'return' : 'order',
-    title: cancelled ? `Venda cancelada #${sale.id}` : `Novo pedido #${sale.id}`,
-    description: `${name} · ${BRL.format(Number(sale.total_value))}`,
-    createdAt: sale.created_at,
+    id: event.id,
+    type: productEvent ? 'product' : cancelled ? 'return' : 'order',
+    title: `${entity} ${actionLabel} #${event.entityId}`,
+    description: productEvent ? 'Atualização de produto' : 'Movimentação de venda',
+    createdAt: event.createdAt,
   }
 }
 
@@ -94,14 +93,18 @@ export function DashboardScreen() {
   const { navigateTo } = useAppNavigation()
   const { catalogRevision, syncNow, isSyncing } = useMercadoLivreSync()
   const systemClientId = user?.systemClientId ?? null
+  const canReadProducts = hasProductReadPermission(user)
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [recentActivity, setRecentActivity] = useState<ActivityRowData[]>([])
-  const [lowStockCount, setLowStockCount] = useState(0)
   const [range, setRange] = useState<DashboardRange>('7d')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reportModalOpen, setReportModalOpen] = useState(false)
+  const [lowStockModalOpen, setLowStockModalOpen] = useState(false)
+  const [lowStockRefreshKey, setLowStockRefreshKey] = useState(0)
+  const [selectedProduct, setSelectedProduct] = useState<ProductDto | null>(null)
+  const hasLoadedRef = useRef(false)
 
   const openReport = useCallback(() => setReportModalOpen(true), [])
   const closeReport = useCallback(() => setReportModalOpen(false), [])
@@ -109,41 +112,27 @@ export function DashboardScreen() {
   const load = useCallback(
     async (selectedRange: DashboardRange) => {
       if (systemClientId == null) return
-      setLoading(true)
+      if (!hasLoadedRef.current) setLoading(true)
       setError(null)
 
-      const [summaryResult, salesResult, productsResult] = await Promise.allSettled([
-        getDashboardSummary(systemClientId, selectedRange),
-        listSales(systemClientId, 0, SOURCE_PAGE_SIZE),
-        listProducts(systemClientId, 0, SOURCE_PAGE_SIZE),
-      ])
-
-      // KPIs + gráfico são o núcleo: se o /summary falha, a tela mostra erro.
-      if (summaryResult.status !== 'fulfilled') {
-        const reason = summaryResult.reason
+      let dashboardSummary: DashboardSummary
+      try {
+        dashboardSummary = await getDashboardSummary(systemClientId, selectedRange)
+      } catch (reason) {
         setError(reason instanceof Error ? reason.message : 'Não foi possível carregar o painel.')
         setLoading(false)
         return
       }
-      setSummary(summaryResult.value)
-
-      // Estoque baixo e atividade recente são complementares: se falharem,
-      // degradam para vazio sem derrubar o painel.
-      const products =
-        productsResult.status === 'fulfilled' ? productsResult.value.content : []
-      const productNames = Object.fromEntries(products.map((p) => [p.id, p.name]))
-      setLowStockCount(products.filter((p) => availableQty(p) < LOW_STOCK_THRESHOLD).length)
-
-      const sales = salesResult.status === 'fulfilled' ? salesResult.value.content : []
-      const recent = [...sales]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, RECENT_LIMIT)
-        .map((sale) => saleToActivity(sale, productNames))
-      setRecentActivity(recent)
+      setSummary(dashboardSummary)
+      hasLoadedRef.current = true
+      const events = canReadProducts
+        ? dashboardSummary.recentEvents
+        : dashboardSummary.recentEvents.filter((event) => event.entityType.toUpperCase() !== 'PRODUCT')
+      setRecentActivity(events.slice(0, RECENT_LIMIT).map(eventToActivity))
 
       setLoading(false)
     },
-    [systemClientId],
+    [systemClientId, canReadProducts],
   )
 
   // Espelha o range atual para o effect de recarga não precisar depender dele
@@ -178,10 +167,12 @@ export function DashboardScreen() {
     return [
       { id: 'products', label: 'Produtos', value: NUM.format(summary.totalProducts), trend: summary.totalProductsChangePct, icon: <FiPackage size={16} /> },
       { id: 'inventory', label: 'Estoque total', value: NUM.format(summary.totalStock), trend: summary.totalStockChangePct, icon: <FiBox size={16} /> },
+      { id: 'inventoryValue', label: 'Valor em estoque', value: BRL.format(summary.inventoryValue), icon: <FiDollarSign size={16} /> },
       { id: 'listings', label: 'Anúncios ativos', value: NUM.format(summary.activeListings), trend: summary.activeListingsChangePct, icon: <FiShoppingBag size={16} /> },
-      { id: 'revenue', label: 'Vendas (hoje)', value: BRL.format(summary.revenueToday), trend: summary.revenueTodayChangePct, icon: <FiDollarSign size={16} /> },
+      { id: 'revenue', label: 'Vendas (hoje)', value: BRL.format(summary.revenueToday), detail: `${NUM.format(summary.salesTodayCount)} venda(s)`, trend: summary.revenueTodayChangePct, icon: <FiDollarSign size={16} /> },
     ]
-  }, [summary])
+      .filter((card) => canReadProducts || !['products', 'inventory', 'inventoryValue', 'listings'].includes(card.id))
+  }, [summary, canReadProducts])
 
   const maxSalesValue = useMemo(() => {
     if (!summary || summary.salesByDay.length === 0) return 0
@@ -195,11 +186,11 @@ export function DashboardScreen() {
       summary.totalStock === 0 &&
       summary.activeListings === 0 &&
       summary.revenueToday === 0 &&
-      lowStockCount === 0 &&
+      (!canReadProducts || summary.lowStockCount === 0) &&
       recentActivity.length === 0 &&
       summary.salesByDay.every((p) => p.total === 0)
     )
-  }, [summary, lowStockCount, recentActivity])
+  }, [summary, canReadProducts, recentActivity])
 
   const reportModal = (
     <GenerateReportModal
@@ -263,26 +254,29 @@ export function DashboardScreen() {
           <article key={card.id} style={styles.kpiCard}>
             <div style={styles.kpiTop}>
               <span style={styles.kpiIcon}>{card.icon}</span>
-              <span
-                style={{
-                  ...styles.kpiChange,
-                  ...(card.trend >= 0 ? styles.kpiChangePositive : styles.kpiChangeNegative),
-                }}
-              >
-                <FiArrowUpRight
-                  size={13}
-                  style={{ transform: card.trend >= 0 ? 'none' : 'rotate(90deg)' }}
-                />
-                {formatPercent(card.trend)}
-              </span>
+              {'trend' in card && typeof card.trend === 'number' && (
+                <span
+                  style={{
+                    ...styles.kpiChange,
+                    ...(card.trend >= 0 ? styles.kpiChangePositive : styles.kpiChangeNegative),
+                  }}
+                >
+                  <FiArrowUpRight
+                    size={13}
+                    style={{ transform: card.trend >= 0 ? 'none' : 'rotate(90deg)' }}
+                  />
+                  {formatPercent(card.trend)}
+                </span>
+              )}
             </div>
             <p style={styles.kpiLabel}>{card.label}</p>
             <strong style={styles.kpiValue}>{card.value}</strong>
+            {'detail' in card && card.detail && <span style={styles.kpiDetail}>{card.detail}</span>}
           </article>
         ))}
       </section>
 
-      {lowStockCount > 0 && (
+      {canReadProducts && summary.lowStockCount > 0 && (
         <section style={styles.lowStockBanner}>
           <div style={styles.lowStockLeft}>
             <span style={styles.lowStockIcon}>
@@ -291,13 +285,13 @@ export function DashboardScreen() {
             <div>
               <p style={styles.lowStockTitle}>Alertas de estoque baixo</p>
               <p style={styles.lowStockText}>
-                {lowStockCount === 1
-                  ? '1 item está abaixo do limite de segurança.'
-                  : `${NUM.format(lowStockCount)} itens estão abaixo do limite de segurança.`}
+                {summary.lowStockCount === 1
+                  ? '1 item está no limite mínimo ou abaixo dele.'
+                  : `${NUM.format(summary.lowStockCount)} itens estão no limite mínimo ou abaixo dele.`}
               </p>
             </div>
           </div>
-          <button type="button" style={styles.lowStockBtn} onClick={() => navigateTo('Estoque')}>
+          <button type="button" style={styles.lowStockBtn} onClick={() => setLowStockModalOpen(true)}>
             Ver itens
           </button>
         </section>
@@ -399,6 +393,27 @@ export function DashboardScreen() {
             </button>
           </aside>
         </section>
+      )}
+      {canReadProducts && systemClientId != null && (
+        <LowStockProductsModal
+          key={lowStockRefreshKey}
+          open={lowStockModalOpen}
+          systemClientId={systemClientId}
+          onClose={() => setLowStockModalOpen(false)}
+          onViewProduct={setSelectedProduct}
+        />
+      )}
+      {canReadProducts && systemClientId != null && selectedProduct != null && (
+        <ProductDetailDialog
+          productId={selectedProduct.id}
+          initialProduct={selectedProduct}
+          systemClientId={systemClientId}
+          onClose={() => setSelectedProduct(null)}
+          onChanged={() => {
+            setLowStockRefreshKey((current) => current + 1)
+            void load(range)
+          }}
+        />
       )}
       {reportModal}
     </div>
@@ -622,6 +637,11 @@ const styles = {
     lineHeight: 1.1,
     fontWeight: 700,
     color: '#0f172a',
+  },
+  kpiDetail: {
+    marginTop: '-4px',
+    color: '#64748b',
+    fontSize: '12px',
   },
   lowStockBanner: {
     borderRadius: '12px',
