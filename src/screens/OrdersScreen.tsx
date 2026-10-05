@@ -25,6 +25,12 @@ type ChannelFilter = 'all' | 'physical' | 'marketplace'
 
 const ITEMS_PER_PAGE = 8
 
+const CHANNEL_FILTER_OPTIONS: ReadonlyArray<{ value: ChannelFilter; label: string }> = [
+  { value: 'all', label: 'Todas' },
+  { value: 'physical', label: 'Loja física' },
+  { value: 'marketplace', label: 'Marketplaces' },
+]
+
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
 const CHANNEL_LABELS: Record<SaleChannel, string> = {
@@ -60,6 +66,14 @@ function isToday(iso: string): boolean {
 
 function isPhysicalChannel(channel: SaleChannel): boolean {
   return channel === 'PHYSICAL' || channel === 'MANUAL'
+}
+
+function normalizeSearch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim()
 }
 
 export function OrdersScreen() {
@@ -121,11 +135,8 @@ export function OrdersScreen() {
 
   useEffect(() => {
     void fetchSales()
-  }, [fetchSales])
-
-  useEffect(() => {
     void fetchProducts()
-  }, [catalogRevision, fetchProducts])
+  }, [catalogRevision, fetchProducts, fetchSales])
 
   const handleRegisterSale = useCallback(
     async (data: LocalSaleFormData) => {
@@ -170,14 +181,16 @@ export function OrdersScreen() {
     } else if (channelFilter === 'marketplace') {
       rows = rows.filter((s) => !isPhysicalChannel(s.channel))
     }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
+    const q = normalizeSearch(searchQuery)
+    if (q) {
       rows = rows.filter((s) => {
         const name = productNamesById[s.product_id] ?? ''
+        const channelLabel = CHANNEL_LABELS[s.channel] ?? s.channel
         return (
-          name.toLowerCase().includes(q) ||
+          normalizeSearch(name).includes(q) ||
           String(s.id).includes(q) ||
-          s.channel.toLowerCase().includes(q)
+          normalizeSearch(s.channel).includes(q) ||
+          normalizeSearch(channelLabel).includes(q)
         )
       })
     }
@@ -206,6 +219,11 @@ export function OrdersScreen() {
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
+    setCurrentPage(1)
+  }
+
+  const handleChannelFilter = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setChannelFilter(e.target.value as ChannelFilter)
     setCurrentPage(1)
   }
 
@@ -259,16 +277,6 @@ export function OrdersScreen() {
   return (
     <div style={styles.page}>
       <div style={styles.topBar}>
-        <div style={styles.searchWrap}>
-          <FiSearch size={18} color="#9ca3af" style={{ flexShrink: 0 }} />
-          <input
-            type="text"
-            placeholder="Buscar por produto, ID ou canal…"
-            value={searchQuery}
-            onChange={handleSearch}
-            style={styles.searchInput}
-          />
-        </div>
         <div style={styles.topBarRight}>
           <div style={styles.userInfo}>
             <div style={styles.userText}>
@@ -351,29 +359,35 @@ export function OrdersScreen() {
         </div>
       </div>
 
-      <div style={styles.tabs}>
-        {(
-          [
-            { id: 'all' as const, label: 'Todas' },
-            { id: 'physical' as const, label: 'Loja física' },
-            { id: 'marketplace' as const, label: 'Marketplaces' },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            style={{
-              ...styles.tabBtn,
-              ...(channelFilter === tab.id ? styles.tabBtnActive : {}),
-            }}
-            onClick={() => {
-              setChannelFilter(tab.id)
-              setCurrentPage(1)
-            }}
+      <div style={styles.filterGroup} role="group" aria-label="Filtros de vendas">
+        <div style={styles.channelFilter}>
+          <label htmlFor="sales-channel-filter" style={styles.filterLabel}>
+            Filtrar por canal
+          </label>
+          <select
+            id="sales-channel-filter"
+            value={channelFilter}
+            onChange={handleChannelFilter}
+            style={styles.filterSelect}
           >
-            {tab.label}
-          </button>
-        ))}
+            {CHANNEL_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={styles.searchWrap}>
+          <FiSearch size={18} color="#9ca3af" style={{ flexShrink: 0 }} />
+          <input
+            type="search"
+            aria-label="Buscar vendas"
+            placeholder="Buscar por produto, ID ou canal…"
+            value={searchQuery}
+            onChange={handleSearch}
+            style={styles.searchInput}
+          />
+        </div>
       </div>
 
       <div style={styles.tableCard}>
@@ -514,7 +528,7 @@ const styles = {
   topBar: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     gap: '16px',
     marginBottom: '28px',
     flexWrap: 'wrap' as const,
@@ -682,27 +696,35 @@ const styles = {
     cursor: 'pointer',
     flexShrink: 0,
   },
-  tabs: {
+  filterGroup: {
     display: 'flex',
-    gap: '8px',
+    alignItems: 'center',
+    gap: '16px',
     marginBottom: '16px',
     flexWrap: 'wrap' as const,
   },
-  tabBtn: {
-    padding: '8px 16px',
-    borderRadius: '999px',
+  channelFilter: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexShrink: 0,
+  },
+  filterLabel: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#374151',
+  },
+  filterSelect: {
+    minWidth: '180px',
+    padding: '9px 36px 9px 12px',
+    borderRadius: '10px',
     border: '1px solid #e5e7eb',
     backgroundColor: '#ffffff',
     fontFamily: 'inherit',
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#6b7280',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#111827',
     cursor: 'pointer',
-  },
-  tabBtnActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-    color: '#ffffff',
   },
   tableCard: {
     backgroundColor: '#ffffff',
