@@ -37,7 +37,8 @@ import { UserLoginAccount } from './screens/user/userLogin/UserLoginAccount'
 import { UserChangePassword } from './screens/user/userChangePassword/UserChangePassword'
 import { MercadoLivreOAuthModal } from './components/MercadoLivreOAuthModal'
 import { MercadoLivreDebugPanel } from './components/MercadoLivreDebugPanel'
-import { parseUserRole, type UserRole } from './lib/userResource'
+import { hasUserManagePermission, parseUserRole, type UserRole } from './lib/userResource'
+import { ResetPasswordScreen } from './screens/user/userChangePassword/ResetPasswordScreen'
 import { MercadoLivreSyncStatusBar } from './components/MercadoLivreSyncStatusBar'
 
 
@@ -68,6 +69,7 @@ export function AppShell() {
   const mainScrollRef = useRef<HTMLElement | null>(null)
   const { user, status, skipAuth, logout: authLogout } = useAuth()
   const [authScreen, setAuthScreen] = useState<UserAuthScreenLabel>('Login')
+  const canManageUsers = hasUserManagePermission(user)
   const userRole = parseUserRole(
     user ? { ...user.resource, role: user.role ?? user.resource.role } : null,
   )
@@ -81,8 +83,8 @@ export function AppShell() {
       { label: 'Anúncios', icon: <FiList size={20} />, Screen: ListingsScreen },
       { label: 'Usuários', icon: <FiUsers size={20} />, Screen: UsersScreen },
       { label: 'Configurações', icon: <FiSettings size={20} />, Screen: SettingsScreen },
-    ].filter((item) => ROLE_SCREEN_ACCESS[userRole].includes(item.label as AppScreenLabel)),
-    [userRole]
+    ].filter((item) => (item.label === 'Usuários' && canManageUsers) || ROLE_SCREEN_ACCESS[userRole].includes(item.label as AppScreenLabel)),
+    [userRole, canManageUsers]
   )
   const [activeLabel, setActiveLabel] = useState(sidebarItems[0]?.label ?? 'Painel')
   const visibleActiveLabel = sidebarItems.some((item) => item.label === activeLabel)
@@ -130,9 +132,9 @@ export function AppShell() {
         </div>
       ) : (
         <AppNavigationProvider onNavigate={(label: AppScreenLabel) => setActiveLabel(label)}>
-          <div style={styles.layout}>
+          <div style={styles.layout} className="app-layout">
             <AppSidebar items={sidebarItems} activeLabel={activeLabel} onSelect={setActiveLabel} />
-            <div style={styles.mainColumn}>
+            <div style={styles.mainColumn} className="app-main-column">
               <MercadoLivreSyncStatusBar onReconnect={() => setActiveLabel('Marketplaces')} />
               <main ref={mainScrollRef} style={styles.main}>
                 {activeItem ? (
@@ -150,6 +152,8 @@ export function AppShell() {
 }
 
 function App() {
+  // Recovery must open even with a logged-in session, without marketplace/debug providers reading its URL.
+  if (window.location.pathname.replace(/\/$/, '') === '/reset-password') return <ResetPasswordScreen />
   return (
     <AuthProvider>
       <MercadoLivreOAuthProvider>

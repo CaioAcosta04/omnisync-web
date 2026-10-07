@@ -32,12 +32,13 @@ export function AppSidebar({ items, activeLabel, onSelect }: AppSidebarProps) {
 
   return (
     <Sidebar
+      className="app-sidebar"
       rootStyles={sidebarStyles.sidebar}
       backgroundColor="#ffffff"
       width="260px"
     >
       <div style={sidebarStyles.sidebarInner}>
-        <div style={sidebarStyles.logoBlock}>
+        <div style={sidebarStyles.logoBlock} className="app-sidebar-brand">
           <img src={logo} alt="OmniSync logo" style={sidebarStyles.logoImg} />
           <div>
             <div style={sidebarStyles.title}>OmniSync</div>
@@ -61,7 +62,7 @@ export function AppSidebar({ items, activeLabel, onSelect }: AppSidebarProps) {
           ))}
         </Menu>
 
-        <div style={sidebarStyles.userBlock}>
+        <div style={sidebarStyles.userBlock} className="app-sidebar-user">
           <div style={sidebarStyles.avatar}>
             <span style={sidebarStyles.avatarInitials}>{initials}</span>
           </div>
