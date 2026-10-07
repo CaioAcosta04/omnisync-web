@@ -18,6 +18,7 @@ import {
 } from 'react-icons/fi'
 import { CreateUserModal, type NewUserData } from '../components/CreateUserModal'
 import { ManageUserModal, type ManagedUser } from '../components/ManageUserModal'
+import { AdminPasswordReset } from '../components/AdminPasswordReset'
 import { useAuth } from '../contexts/AuthContext'
 import { formatRelative } from '../lib/relativeTime'
 import {
@@ -501,7 +502,7 @@ export function UsersScreen() {
       </div>
 
       {/* Users table */}
-      <div style={styles.tableWrap}>
+      <div style={styles.tableWrap} className="users-table-scroll">
         <table style={styles.table}>
           <thead>
             <tr>
@@ -579,6 +580,7 @@ export function UsersScreen() {
                   </td>
                   <td style={{ ...styles.td, ...styles.tdLast }}>
                     <div style={styles.actionsCell}>
+                      <AdminPasswordReset userId={Number(user.id)} name={user.name} />
                       {canManageUser && (
                         <>
                           <button

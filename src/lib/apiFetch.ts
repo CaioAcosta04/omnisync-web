@@ -9,6 +9,8 @@ const AUTH_PATHS_NO_REFRESH = new Set([
   '/api/auth/register-company',
   '/api/auth/refresh',
   '/api/auth/logout',
+  '/api/auth/reset-password',
+  '/api/auth/forgot-password',
 ])
 
 function resolveUrl(path: string): string {

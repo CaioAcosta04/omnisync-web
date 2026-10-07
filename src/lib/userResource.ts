@@ -1,5 +1,12 @@
 export type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
 
+/** Explicit permissions win, including an empty list. Never grant access from the role name. */
+export function hasUserManagePermission(user: { permissions?: string[]; resource?: Record<string, unknown> | null } | null | undefined): boolean {
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : user?.resource?.permissions
+  return Array.isArray(permissions) && permissions.some(permission => typeof permission === 'string' &&
+    ['USER_MANAGE', 'PERM_USER_MANAGE', 'GESTÃO DE USUÁRIOS', 'USER MANAGEMENT', 'ACESSO TOTAL', 'FULL ACCESS'].includes(permission.trim().toUpperCase()))
+}
+
 const VALID_ROLES: UserRole[] = ['admin', 'manager', 'editor', 'viewer']
 
 const DEFAULT_PERMISSIONS_BY_ROLE: Record<UserRole, string[]> = {

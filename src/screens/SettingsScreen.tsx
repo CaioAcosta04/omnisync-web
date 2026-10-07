@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import {
-  FiEye,
-  FiEyeOff,
   FiFileText,
   FiLock,
   FiMonitor,
@@ -14,6 +12,7 @@ import { BsBuildings } from 'react-icons/bs'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserAuthNavigation } from '../contexts/UserAuthNavigationContext'
 import { parseUserRole } from '../lib/userResource'
+import { PasswordForm } from '../components/PasswordForm'
 
 type SettingsTab = 'profile' | 'store' | 'security' | 'appearance'
 
@@ -125,12 +124,7 @@ function StoreSection() {
 /* ─── Security Section ─── */
 
 function SecuritySection() {
-  const [currentPw, setCurrentPw] = useState('')
-  const [newPw, setNewPw] = useState('')
-  const [confirmPw, setConfirmPw] = useState('')
-  const [showCurrent, setShowCurrent] = useState(false)
-  const [showNew, setShowNew] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
+  const { logout } = useUserAuthNavigation()
 
   return (
     <div style={s.sectionColumn}>
@@ -138,37 +132,7 @@ function SecuritySection() {
         <h3 style={s.cardTitle}>Alterar Senha</h3>
         <p style={s.cardDesc}>Mantenha sua conta segura com uma senha forte.</p>
 
-        <SecurityPasswordField
-          label="Senha Atual"
-          value={currentPw}
-          onChange={setCurrentPw}
-          visible={showCurrent}
-          onToggle={() => setShowCurrent((v) => !v)}
-          placeholder="Digite sua senha atual"
-        />
-        <SecurityPasswordField
-          label="Nova Senha"
-          value={newPw}
-          onChange={setNewPw}
-          visible={showNew}
-          onToggle={() => setShowNew((v) => !v)}
-          placeholder="Mínimo 6 caracteres"
-        />
-        <SecurityPasswordField
-          label="Confirmar Nova Senha"
-          value={confirmPw}
-          onChange={setConfirmPw}
-          visible={showConfirm}
-          onToggle={() => setShowConfirm((v) => !v)}
-          placeholder="Repita a nova senha"
-        />
-
-        <div style={s.cardActions}>
-          <button type="button" style={s.btnDisabled} disabled>
-            <FiLock size={16} />
-            Alterar Senha — Em breve
-          </button>
-        </div>
+        <PasswordForm operation={{ kind: 'own' }} onSuccess={logout} />
       </div>
     </div>
   )
@@ -279,7 +243,7 @@ export function SettingsScreen() {
         <p style={s.pageSubtitle}>Gerencie sua conta, loja e preferências da plataforma.</p>
       </div>
 
-      <div style={s.content}>
+      <div className="settings-content">
         <nav style={s.sidebar}>
           {visibleTabs.map((tab) => (
             <button
@@ -742,39 +706,3 @@ const s = {
     gap: '14px',
   },
 } as const
-
-type SecurityPasswordFieldProps = {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  visible: boolean
-  onToggle: () => void
-  placeholder: string
-}
-
-function SecurityPasswordField({
-  label,
-  value,
-  onChange,
-  visible,
-  onToggle,
-  placeholder,
-}: SecurityPasswordFieldProps) {
-  return (
-    <div style={s.fieldGroup}>
-      <label style={s.label}>{label}</label>
-      <div style={s.passwordWrap}>
-        <input
-          style={s.inputPassword}
-          type={visible ? 'text' : 'password'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-        />
-        <button type="button" style={s.eyeBtn} onClick={onToggle}>
-          {visible ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-        </button>
-      </div>
-    </div>
-  )
-}

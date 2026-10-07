@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://omnisync.site/api/:path*"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/index.html"
     }
   ]
 }
