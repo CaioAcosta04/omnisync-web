@@ -9,10 +9,13 @@ import {
   FiCornerUpLeft,
   FiDollarSign,
   FiFileText,
+  FiGlobe,
+  FiLink,
   FiPackage,
   FiRefreshCw,
   FiShoppingBag,
   FiShoppingCart,
+  FiUser,
 } from 'react-icons/fi'
 import type { ReactNode } from 'react'
 import { ActivityEmptyState } from '../components/ActivityEmptyState'
@@ -24,8 +27,15 @@ import { useAuth } from '../contexts/AuthContext'
 import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { formatRelative } from '../lib/relativeTime'
 import { hasProductReadPermission } from '../lib/userResource'
-import { getDashboardSummary, type DashboardRange, type DashboardSummary } from '../services/dashboardApi'
+import {
+  getDashboardAnalytics,
+  getDashboardSummary,
+  type DashboardAnalytics,
+  type DashboardRange,
+  type DashboardSummary,
+} from '../services/dashboardApi'
 import type { ProductDto } from '../types/product'
+import './DashboardScreen.css'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +43,7 @@ const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 const NUM = new Intl.NumberFormat('pt-BR')
 const PCT = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 const WEEKDAY = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' })
+const DAYMONTH = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' })
 
 /** Quantos eventos mostrar no painel de atividade recente. */
 const RECENT_LIMIT = 6
@@ -42,19 +53,28 @@ const RANGE_OPTIONS: { id: DashboardRange; label: string }[] = [
   { id: '30d', label: '30 dias' },
 ]
 
+// ─── Tipos internos ───────────────────────────────────────────────────────────
+
+type ActivityType = 'order' | 'return' | 'product' | 'user' | 'integration' | 'listing'
+
 type ActivityRowData = {
   id: string
-  type: 'order' | 'return' | 'product'
+  type: ActivityType
   title: string
   description: string
   createdAt: string
 }
 
-const ACTIVITY_STYLE: Record<ActivityRowData['type'], { icon: ReactNode; bg: string; color: string }> = {
+const ACTIVITY_STYLE: Record<ActivityType, { icon: ReactNode; bg: string; color: string }> = {
   order: { icon: <FiShoppingCart size={14} />, bg: '#dcfce7', color: '#16a34a' },
   return: { icon: <FiCornerUpLeft size={14} />, bg: '#fee2e2', color: '#dc2626' },
   product: { icon: <FiPackage size={14} />, bg: '#e0e7ff', color: '#4f46e5' },
+  user: { icon: <FiUser size={14} />, bg: '#fef9c3', color: '#ca8a04' },
+  integration: { icon: <FiGlobe size={14} />, bg: '#fce7f3', color: '#db2777' },
+  listing: { icon: <FiLink size={14} />, bg: '#e0f2fe', color: '#0284c7' },
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatPercent(value: number): string {
   const sign = value > 0 ? '+' : value < 0 ? '−' : ''
@@ -69,19 +89,67 @@ function weekdayLabel(dateStr: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
+function dayMonthLabel(dateStr: string): string {
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? `${dateStr}T00:00:00` : dateStr
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return dateStr
+  return DAYMONTH.format(date)
+}
+
+/**
+ * Converte um evento do audit_logs em ActivityRowData.
+ * Suporta todas as entidades do enum AuditEntityType:
+ * USER, PRODUCT, SALE, INTEGRATION, LISTING.
+ */
 function eventToActivity(event: DashboardSummary['recentEvents'][number]): ActivityRowData {
-  const productEvent = event.entityType.toUpperCase() === 'PRODUCT'
-  const action = event.action.toUpperCase()
-  const cancelled = !productEvent && action.includes('CANCEL')
-  const entity = productEvent ? 'Produto' : 'Venda'
-  const actionLabel = productEvent
-    ? ({ create: 'criado', edit: 'atualizado', delete: 'removido' }[action.toLowerCase()] ?? 'atualizado')
-    : ({ CREATED: 'criada', UPDATED: 'atualizada', CANCELLED: 'cancelada' }[action] ?? 'atualizada')
+  const entityUpper = event.entityType.toUpperCase()
+  const actionUpper = event.action.toUpperCase()
+
+  const ENTITY_LABELS: Record<string, string> = {
+    PRODUCT: 'Produto',
+    SALE: 'Venda',
+    USER: 'Usuário',
+    INTEGRATION: 'Integração',
+    LISTING: 'Anúncio',
+  }
+
+  const ACTION_LABELS: Record<string, string> = {
+    CREATE: 'criado(a)',
+    CREATED: 'criado(a)',
+    EDIT: 'atualizado(a)',
+    UPDATE: 'atualizado(a)',
+    UPDATED: 'atualizado(a)',
+    DELETE: 'removido(a)',
+    DELETED: 'removido(a)',
+    CANCEL: 'cancelado(a)',
+    CANCELLED: 'cancelado(a)',
+  }
+
+  const ENTITY_DESCRIPTIONS: Record<string, string> = {
+    PRODUCT: 'Atualização de produto',
+    SALE: 'Movimentação de venda',
+    USER: 'Alteração de usuário',
+    INTEGRATION: 'Evento de integração',
+    LISTING: 'Atualização de anúncio',
+  }
+
+  const entityLabel = ENTITY_LABELS[entityUpper] ?? entityUpper
+  const actionLabel = ACTION_LABELS[actionUpper] ?? actionUpper.toLowerCase()
+
+  let type: ActivityType = 'order'
+  if (entityUpper === 'PRODUCT') type = 'product'
+  else if (entityUpper === 'USER') type = 'user'
+  else if (entityUpper === 'INTEGRATION') type = 'integration'
+  else if (entityUpper === 'LISTING') type = 'listing'
+  else if (entityUpper === 'SALE' && (actionUpper === 'CANCELLED' || actionUpper === 'CANCEL'))
+    type = 'return'
+  else if (entityUpper === 'SALE') type = 'order'
+
   return {
     id: event.id,
-    type: productEvent ? 'product' : cancelled ? 'return' : 'order',
-    title: `${entity} ${actionLabel} #${event.entityId}`,
-    description: productEvent ? 'Atualização de produto' : 'Movimentação de venda',
+    type,
+    title: `${entityLabel} ${actionLabel} #${event.entityId}`,
+    description: ENTITY_DESCRIPTIONS[entityUpper] ?? 'Evento do sistema',
     createdAt: event.createdAt,
   }
 }
@@ -96,6 +164,8 @@ export function DashboardScreen() {
   const canReadProducts = hasProductReadPermission(user)
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null)
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null)
   const [recentActivity, setRecentActivity] = useState<ActivityRowData[]>([])
   const [range, setRange] = useState<DashboardRange>('7d')
   const [loading, setLoading] = useState(true)
@@ -125,12 +195,30 @@ export function DashboardScreen() {
       }
       setSummary(dashboardSummary)
       hasLoadedRef.current = true
+
+      // Filtra eventos por permissão: sem PRODUCT_READ não exibe eventos de produto
       const events = canReadProducts
         ? dashboardSummary.recentEvents
-        : dashboardSummary.recentEvents.filter((event) => event.entityType.toUpperCase() !== 'PRODUCT')
+        : dashboardSummary.recentEvents.filter(
+            (event) => event.entityType.toUpperCase() !== 'PRODUCT',
+          )
       setRecentActivity(events.slice(0, RECENT_LIMIT).map(eventToActivity))
-
       setLoading(false)
+
+      // Carrega analytics em paralelo (só para usuários com PRODUCT_READ)
+      if (canReadProducts) {
+        setAnalytics(null)
+        setAnalyticsError(null)
+        getDashboardAnalytics(systemClientId, selectedRange)
+          .then(setAnalytics)
+          .catch((reason) => {
+            setAnalyticsError(
+              reason instanceof Error
+                ? reason.message
+                : 'Não foi possível carregar os gráficos analíticos.',
+            )
+          })
+      }
     },
     [systemClientId, canReadProducts],
   )
@@ -162,16 +250,42 @@ export function DashboardScreen() {
     await load(range)
   }, [isSyncing, syncNow, load, range])
 
+  // ── KPI cards — sem "Total de produtos" ─────────────────────────────────
   const kpiCards = useMemo(() => {
     if (!summary) return []
     return [
-      { id: 'products', label: 'Produtos', value: NUM.format(summary.totalProducts), trend: summary.totalProductsChangePct, icon: <FiPackage size={16} /> },
-      { id: 'inventory', label: 'Estoque total', value: NUM.format(summary.totalStock), trend: summary.totalStockChangePct, icon: <FiBox size={16} /> },
-      { id: 'inventoryValue', label: 'Valor em estoque', value: BRL.format(summary.inventoryValue), icon: <FiDollarSign size={16} /> },
-      { id: 'listings', label: 'Anúncios ativos', value: NUM.format(summary.activeListings), trend: summary.activeListingsChangePct, icon: <FiShoppingBag size={16} /> },
-      { id: 'revenue', label: 'Vendas (hoje)', value: BRL.format(summary.revenueToday), detail: `${NUM.format(summary.salesTodayCount)} venda(s)`, trend: summary.revenueTodayChangePct, icon: <FiDollarSign size={16} /> },
-    ]
-      .filter((card) => canReadProducts || !['products', 'inventory', 'inventoryValue', 'listings'].includes(card.id))
+      {
+        id: 'inventory',
+        label: 'Estoque total',
+        value: NUM.format(summary.totalStock),
+        trend: summary.totalStockChangePct,
+        icon: <FiBox size={16} />,
+      },
+      {
+        id: 'inventoryValue',
+        label: 'Valor em estoque',
+        value: BRL.format(summary.inventoryValue),
+        icon: <FiDollarSign size={16} />,
+      },
+      {
+        id: 'listings',
+        label: 'Anúncios ativos',
+        value: NUM.format(summary.activeListings),
+        trend: summary.activeListingsChangePct,
+        icon: <FiShoppingBag size={16} />,
+      },
+      {
+        id: 'revenue',
+        label: 'Vendas (hoje)',
+        value: BRL.format(summary.revenueToday),
+        detail: `${NUM.format(summary.salesTodayCount)} venda(s)`,
+        trend: summary.revenueTodayChangePct,
+        icon: <FiDollarSign size={16} />,
+      },
+    ].filter(
+      (card) =>
+        canReadProducts || !['inventory', 'inventoryValue', 'listings'].includes(card.id),
+    )
   }, [summary, canReadProducts])
 
   const maxSalesValue = useMemo(() => {
@@ -179,10 +293,14 @@ export function DashboardScreen() {
     return Math.max(...summary.salesByDay.map((p) => p.total))
   }, [summary])
 
+  const maxInventoryQty = useMemo(() => {
+    if (!analytics || analytics.inventoryByDay.length === 0) return 0
+    return Math.max(...analytics.inventoryByDay.map((d) => d.quantity))
+  }, [analytics])
+
   const isEmpty = useMemo(() => {
     if (!summary) return false
     return (
-      summary.totalProducts === 0 &&
       summary.totalStock === 0 &&
       summary.activeListings === 0 &&
       summary.revenueToday === 0 &&
@@ -204,7 +322,7 @@ export function DashboardScreen() {
   // ── Loading ──
   if (loading) {
     return (
-      <div style={styles.page}>
+      <div className="dashboard-page" style={styles.page}>
         <DashboardHeader
           onSync={handleSync}
           isSyncing={isSyncing}
@@ -220,7 +338,7 @@ export function DashboardScreen() {
   // ── Erro ──
   if (error) {
     return (
-      <div style={styles.page}>
+      <div className="dashboard-page" style={styles.page}>
         <DashboardHeader
           onSync={handleSync}
           isSyncing={isSyncing}
@@ -246,12 +364,13 @@ export function DashboardScreen() {
   if (!summary) return null
 
   return (
-    <div style={styles.page}>
+    <div className="dashboard-page" style={styles.page}>
       <DashboardHeader onSync={handleSync} isSyncing={isSyncing} onGenerateReport={openReport} />
 
-      <section style={styles.kpiGrid}>
+      {/* KPI cards (sem "Total de produtos") */}
+      <section className="dashboard-kpi-grid" style={styles.kpiGrid} aria-label="Indicadores principais">
         {kpiCards.map((card) => (
-          <article key={card.id} style={styles.kpiCard}>
+          <article key={card.id} style={styles.kpiCard} data-testid={`kpi-${card.id}`}>
             <div style={styles.kpiTop}>
               <span style={styles.kpiIcon}>{card.icon}</span>
               {'trend' in card && typeof card.trend === 'number' && (
@@ -276,6 +395,7 @@ export function DashboardScreen() {
         ))}
       </section>
 
+      {/* Banner de estoque baixo */}
       {canReadProducts && summary.lowStockCount > 0 && (
         <section style={styles.lowStockBanner}>
           <div style={styles.lowStockLeft}>
@@ -303,97 +423,212 @@ export function DashboardScreen() {
           onGoToStock={() => navigateTo('Estoque')}
         />
       ) : (
-        <section style={styles.bottomGrid}>
-          <article style={styles.salesCard}>
-            <div style={styles.sectionHead}>
-              <h2 style={styles.sectionTitle}>Vendas por dia</h2>
-              <div style={styles.rangeToggle}>
-                {RANGE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    style={{
-                      ...styles.rangeBtn,
-                      ...(range === opt.id ? styles.rangeBtnActive : {}),
-                    }}
-                    onClick={() => handleRangeChange(opt.id)}
-                    aria-pressed={range === opt.id}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {summary.salesByDay.length === 0 ? (
-              <div style={styles.chartEmpty}>Sem vendas no período.</div>
-            ) : (
-              <div
-                style={{
-                  ...styles.chartArea,
-                  gridTemplateColumns: `repeat(${summary.salesByDay.length}, minmax(0, 1fr))`,
-                }}
-              >
-                {summary.salesByDay.map((point, index) => {
-                  const barHeight =
-                    maxSalesValue > 0 ? `${Math.max(6, (point.total / maxSalesValue) * 100)}%` : '6%'
-                  const isHighlight = maxSalesValue > 0 && point.total === maxSalesValue
-                  return (
-                    <div key={`${point.date}-${index}`} style={styles.barCol}>
-                      <div
-                        style={{
-                          ...styles.bar,
-                          height: barHeight,
-                          ...(isHighlight ? styles.barHighlight : {}),
-                        }}
-                        title={`${weekdayLabel(point.date)}: ${BRL.format(point.total)} · ${NUM.format(point.count)} venda(s)`}
-                      />
-                      <span style={styles.barLabel}>{weekdayLabel(point.date)}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </article>
-
-          <aside style={styles.eventsCard}>
-            <div style={styles.sectionHead}>
-              <h2 style={styles.sectionTitle}>Atividade recente</h2>
-            </div>
-            <div style={styles.eventsList}>
-              {recentActivity.length === 0 ? (
-                <div style={styles.eventsEmpty}>
-                  <FiActivity size={20} color="#cbd5e1" />
-                  <span>Nenhuma atividade recente.</span>
+        <>
+          {/* Linha principal: gráfico de vendas + eventos recentes */}
+          <section className="dashboard-bottom-grid" style={styles.bottomGrid}>
+            <article style={styles.salesCard} aria-label="Vendas por dia">
+              <div style={styles.sectionHead}>
+                <h2 style={styles.sectionTitle}>Vendas por dia</h2>
+                <div style={styles.rangeToggle} role="group" aria-label="Seletor de período">
+                  {RANGE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      id={`range-btn-${opt.id}`}
+                      type="button"
+                      style={{
+                        ...styles.rangeBtn,
+                        ...(range === opt.id ? styles.rangeBtnActive : {}),
+                      }}
+                      onClick={() => handleRangeChange(opt.id)}
+                      aria-pressed={range === opt.id}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
+              </div>
+              {summary.salesByDay.length === 0 ? (
+                <div style={styles.chartEmpty} role="status">Sem vendas no período.</div>
               ) : (
-                recentActivity.map((event) => {
-                  const cfg = ACTIVITY_STYLE[event.type]
-                  return (
-                    <div key={event.id} style={styles.eventRow}>
-                      <span style={{ ...styles.eventIcon, backgroundColor: cfg.bg, color: cfg.color }}>
-                        {cfg.icon}
-                      </span>
-                      <div style={styles.eventBody}>
-                        <p style={styles.eventTitle}>{event.title}</p>
-                        <p style={styles.eventDesc}>{event.description}</p>
-                        {event.createdAt && (
-                          <p style={styles.eventTime}>
-                            <FiClock size={12} />
-                            {formatRelative(event.createdAt)}
-                          </p>
-                        )}
+                <div className="dashboard-chart-scroll">
+                  <div
+                    className="dashboard-chart-scroll-inner"
+                    style={{
+                      ...styles.chartArea,
+                      gridTemplateColumns: `repeat(${summary.salesByDay.length}, minmax(0, 1fr))`,
+                    }}
+                  >
+                  {summary.salesByDay.map((point, index) => {
+                    const barHeight =
+                      maxSalesValue > 0 ? `${Math.max(6, (point.total / maxSalesValue) * 100)}%` : '6%'
+                    const isHighlight = maxSalesValue > 0 && point.total === maxSalesValue
+                    return (
+                      <div key={`${point.date}-${index}`} style={styles.barCol}>
+                        <div
+                          style={{
+                            ...styles.bar,
+                            height: barHeight,
+                            ...(isHighlight ? styles.barHighlight : {}),
+                          }}
+                          title={`${weekdayLabel(point.date)}: ${BRL.format(point.total)} · ${NUM.format(point.count)} venda(s)`}
+                        />
+                        <span style={styles.barLabel}>{weekdayLabel(point.date)}</span>
                       </div>
-                    </div>
-                  )
-                })
+                    )
+                  })}
+                  </div>
+                </div>
               )}
-            </div>
-            <button type="button" style={styles.viewHistoryBtn} onClick={() => navigateTo('Atividade')}>
-              Ver todo o histórico
-            </button>
-          </aside>
-        </section>
+            </article>
+
+            {/* Eventos recentes (audit_logs — todas as entidades) */}
+            <aside style={styles.eventsCard} aria-label="Atividade recente">
+              <div style={styles.sectionHead}>
+                <h2 style={styles.sectionTitle}>Atividade recente</h2>
+              </div>
+              <div style={styles.eventsList}>
+                {recentActivity.length === 0 ? (
+                  <div style={styles.eventsEmpty}>
+                    <FiActivity size={20} color="#cbd5e1" />
+                    <span>Nenhuma atividade recente.</span>
+                  </div>
+                ) : (
+                  recentActivity.map((event) => {
+                    const cfg = ACTIVITY_STYLE[event.type]
+                    return (
+                      <div key={event.id} style={styles.eventRow}>
+                        <span
+                          style={{ ...styles.eventIcon, backgroundColor: cfg.bg, color: cfg.color }}
+                        >
+                          {cfg.icon}
+                        </span>
+                        <div style={styles.eventBody}>
+                          <p style={styles.eventTitle}>{event.title}</p>
+                          <p style={styles.eventDesc}>{event.description}</p>
+                          {event.createdAt && (
+                            <p style={styles.eventTime}>
+                              <FiClock size={12} />
+                              {formatRelative(event.createdAt)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+              <button
+                type="button"
+                style={styles.viewHistoryBtn}
+                onClick={() => navigateTo('Atividade')}
+              >
+                Ver todo o histórico
+              </button>
+            </aside>
+          </section>
+
+          {/* Gráficos analíticos: estoque por dia + vendas patrocinadas (apenas com PRODUCT_READ) */}
+          {canReadProducts && (
+            <section className="dashboard-analytics-grid" style={styles.analyticsGrid} aria-label="Análise de estoque">
+              {/* Gráfico de estoque por dia */}
+              <article style={styles.chartCard} aria-label="Histórico de estoque">
+                <div style={styles.sectionHead}>
+                  <h2 style={styles.sectionTitle}>Estoque por dia</h2>
+                </div>
+                {analyticsError ? (
+                  <div style={styles.chartErrorPanel} role="alert">
+                    <FiAlertCircle size={18} color="#dc2626" />
+                    <span style={{ color: '#dc2626', fontSize: '13px' }}>{analyticsError}</span>
+                    <button
+                      type="button"
+                      style={styles.chartRetryBtn}
+                      onClick={() => void load(range)}
+                    >
+                      Tentar novamente
+                    </button>
+                  </div>
+                ) : analytics == null ? (
+                  <div style={styles.chartSmallEmpty} role="status">
+                    Carregando...
+                  </div>
+                ) : analytics.inventoryByDay.length === 0 ? (
+                  <div style={styles.chartSmallEmpty} role="status">
+                    Sem histórico de estoque para o período.
+                  </div>
+                ) : (
+                  <div className="dashboard-chart-scroll">
+                    <div
+                      className="dashboard-chart-scroll-inner"
+                      style={{
+                        ...styles.chartSmallArea,
+                        gridTemplateColumns: `repeat(${analytics.inventoryByDay.length}, minmax(0, 1fr))`,
+                      }}
+                    >
+                    {analytics.inventoryByDay.map((point, index) => {
+                      const barHeight =
+                        maxInventoryQty > 0
+                          ? `${Math.max(6, (point.quantity / maxInventoryQty) * 100)}%`
+                          : '6%'
+                      return (
+                        <div key={`${point.date}-${index}`} style={styles.barCol}>
+                          <div
+                            style={{ ...styles.inventoryBar, height: barHeight }}
+                            title={`${dayMonthLabel(point.date)}: ${NUM.format(point.quantity)} un · ${BRL.format(point.value)}`}
+                          />
+                          <span style={styles.barLabel}>{dayMonthLabel(point.date)}</span>
+                        </div>
+                      )
+                    })}
+                    </div>
+                  </div>
+                )}
+              </article>
+
+              {/* Gráfico patrocinado — SOMENTE quando há dados reais (sponsoredSalesByDay.length > 0) */}
+              {analytics != null && analytics.sponsoredSalesByDay.length > 0 && (
+                <article style={styles.chartCard} aria-label="Vendas patrocinadas">
+                  <div style={styles.sectionHead}>
+                    <h2 style={styles.sectionTitle}>Vendas patrocinadas</h2>
+                  </div>
+                  {(() => {
+                    const maxSponsored = Math.max(
+                      ...analytics.sponsoredSalesByDay.map((d) => d.total),
+                    )
+                    return (
+                      <div className="dashboard-chart-scroll">
+                        <div
+                          className="dashboard-chart-scroll-inner"
+                          style={{
+                            ...styles.chartSmallArea,
+                            gridTemplateColumns: `repeat(${analytics.sponsoredSalesByDay.length}, minmax(0, 1fr))`,
+                          }}
+                        >
+                        {analytics.sponsoredSalesByDay.map((point, index) => {
+                          const barHeight =
+                            maxSponsored > 0
+                              ? `${Math.max(6, (point.total / maxSponsored) * 100)}%`
+                              : '6%'
+                          return (
+                            <div key={`${point.date}-${index}`} style={styles.barCol}>
+                              <div
+                                style={{ ...styles.sponsoredBar, height: barHeight }}
+                                title={`${dayMonthLabel(point.date)}: ${BRL.format(point.total)} · ${NUM.format(point.count)} venda(s)`}
+                              />
+                              <span style={styles.barLabel}>{dayMonthLabel(point.date)}</span>
+                            </div>
+                          )
+                        })}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </article>
+              )}
+            </section>
+          )}
+        </>
       )}
+
       {canReadProducts && systemClientId != null && (
         <LowStockProductsModal
           key={lowStockRefreshKey}
@@ -434,12 +669,12 @@ function DashboardHeader({
   disabled?: boolean
 }) {
   return (
-    <section style={styles.headerSection}>
+    <section className="dashboard-header-section" style={styles.headerSection}>
       <div>
         <h1 style={styles.pageTitle}>Visão geral</h1>
         <p style={styles.pageSubtitle}>Métricas de estoque e sincronização em tempo real.</p>
       </div>
-      <div style={styles.headerActions}>
+      <div className="dashboard-header-actions" style={styles.headerActions}>
         <button type="button" style={styles.btnSecondary} onClick={onGenerateReport}>
           <FiFileText size={15} />
           Gerar relatório
@@ -461,7 +696,7 @@ function DashboardHeader({
 function DashboardSkeleton() {
   return (
     <>
-      <section style={styles.kpiGrid}>
+      <section className="dashboard-kpi-grid" style={styles.kpiGrid}>
         {[0, 1, 2, 3].map((i) => (
           <article key={i} style={styles.kpiCard}>
             <div style={styles.kpiTop}>
@@ -474,7 +709,7 @@ function DashboardSkeleton() {
         ))}
       </section>
 
-      <section style={styles.bottomGrid}>
+      <section className="dashboard-bottom-grid" style={styles.bottomGrid}>
         <article style={styles.salesCard}>
           <div style={styles.sectionHead}>
             <span style={{ ...styles.skeletonBlock, width: '150px', height: '20px' }} />
@@ -509,6 +744,8 @@ function DashboardSkeleton() {
     </>
   )
 }
+
+// ─── Estilos ──────────────────────────────────────────────────────────────────
 
 const styles = {
   page: {
@@ -707,6 +944,19 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
   },
+  analyticsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gap: '12px',
+  },
+  chartCard: {
+    backgroundColor: '#ffffff',
+    border: '1px solid #eef2f7',
+    borderRadius: '14px',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column' as const,
+  },
   sectionHead: {
     display: 'flex',
     alignItems: 'center',
@@ -751,6 +1001,16 @@ const styles = {
     background:
       'linear-gradient(to top, rgba(15,23,42,0.02) 1px, transparent 1px) 0 0 / 100% 62px',
   },
+  chartSmallArea: {
+    height: '220px',
+    padding: '20px 16px 12px',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+    alignItems: 'end',
+    gap: '8px',
+    background:
+      'linear-gradient(to top, rgba(15,23,42,0.02) 1px, transparent 1px) 0 0 / 100% 55px',
+  },
   chartEmpty: {
     height: '280px',
     display: 'flex',
@@ -758,6 +1018,35 @@ const styles = {
     justifyContent: 'center',
     color: '#94a3b8',
     fontSize: '14px',
+  },
+  chartSmallEmpty: {
+    height: '220px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#94a3b8',
+    fontSize: '14px',
+  },
+  chartErrorPanel: {
+    height: '220px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '16px',
+  },
+  chartRetryBtn: {
+    border: 'none',
+    borderRadius: '8px',
+    padding: '6px 14px',
+    backgroundColor: '#fee2e2',
+    color: '#dc2626',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginTop: '4px',
   },
   barCol: {
     height: '100%',
@@ -776,10 +1065,24 @@ const styles = {
   barHighlight: {
     backgroundColor: '#6366f1',
   },
+  inventoryBar: {
+    width: '100%',
+    borderRadius: '10px 10px 0 0',
+    backgroundColor: '#6ee7b7',
+    transition: 'height 0.2s ease',
+  },
+  sponsoredBar: {
+    width: '100%',
+    borderRadius: '10px 10px 0 0',
+    backgroundColor: '#fca5a5',
+    transition: 'height 0.2s ease',
+  },
   barLabel: {
-    fontSize: '12px',
+    fontSize: '11px',
     color: '#64748b',
     fontWeight: 600,
+    textAlign: 'center' as const,
+    lineHeight: 1.2,
   },
   eventsCard: {
     backgroundColor: '#ffffff',

@@ -5,10 +5,12 @@ import { apiFetch } from '../lib/apiFetch'
  * Serviço do painel (Dashboard).
  *
  * Consome `GET /api/dashboard/{systemClientId}/summary?range=7d|30d`.
+ * Consome `GET /api/dashboard/{systemClientId}/analytics?range=7d|30d`.
  *
- * O endpoint devolve KPIs (com variação % vs. período anterior), a série de
- * vendas por dia e os eventos recentes. Os itens de estoque baixo são carregados
- * sob demanda pelo endpoint paginado de produtos.
+ * O endpoint summary devolve KPIs (com variação % vs. período anterior), a
+ * série de vendas por dia e os eventos recentes oriundos do audit_logs.
+ * O endpoint analytics devolve o histórico de estoque por dia e vendas
+ * patrocinadas (sponsoredSalesByDay sempre vazio enquanto não há fonte real).
  *
  * Semânticas (definidas pelo backend em DashboardService):
  * - totalStock:     soma de `stock` dos produtos ativos (unidades).
@@ -16,6 +18,8 @@ import { apiFetch } from '../lib/apiFetch'
  * - revenueToday:   faturamento confirmado de hoje (BRL).
  * - *ChangePct:     variação % vs. período anterior (0.0 quando não há base).
  * - salesByDay:     série completa do range (dias sem venda vêm com total 0).
+ * - inventoryByDay: série do range a partir do primeiro registro de histórico.
+ * - sponsoredSalesByDay: vazio enquanto não há fonte real de dados patrocinados.
  *
  * O normalizador coage números com defaults seguros para a tela nunca exibir NaN.
  */
@@ -29,6 +33,30 @@ export type DashboardSalesDay = {
   total: number
   /** Quantidade de vendas no dia. */
   count: number
+}
+
+/** Histórico de estoque por dia. */
+export type DashboardInventoryDay = {
+  /** Data do snapshot (yyyy-mm-dd). */
+  date: string
+  /** Total de unidades em estoque no dia (produtos ativos). */
+  quantity: number
+  /** Valor total do estoque no dia (BRL). */
+  value: number
+}
+
+/** Vendas via anúncios patrocinados por dia. Só é populado quando há fonte real. */
+export type DashboardSponsoredSalesDay = {
+  date: string
+  count: number
+  total: number
+}
+
+/** Resposta do endpoint /analytics. */
+export type DashboardAnalytics = {
+  inventoryByDay: DashboardInventoryDay[]
+  /** Vazio enquanto não há integração real com dados de patrocínio. */
+  sponsoredSalesByDay: DashboardSponsoredSalesDay[]
 }
 
 export type DashboardSummary = {
@@ -106,6 +134,39 @@ export function normalizeDashboardSummary(raw: unknown): DashboardSummary {
   }
 }
 
+function normalizeInventoryByDay(raw: unknown): DashboardInventoryDay[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map((item, index) => {
+    const r = (item ?? {}) as Record<string, unknown>
+    return {
+      date: typeof r.date === 'string' ? r.date : String(index),
+      quantity: toNumber(r.quantity),
+      value: toNumber(r.value),
+    }
+  })
+}
+
+function normalizeSponsoredSalesByDay(raw: unknown): DashboardSponsoredSalesDay[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map((item, index) => {
+    const r = (item ?? {}) as Record<string, unknown>
+    return {
+      date: typeof r.date === 'string' ? r.date : String(index),
+      count: toNumber(r.count),
+      total: toNumber(r.total),
+    }
+  })
+}
+
+/** Converte o payload cru do endpoint /analytics no shape seguro. */
+export function normalizeDashboardAnalytics(raw: unknown): DashboardAnalytics {
+  const r = (raw ?? {}) as Record<string, unknown>
+  return {
+    inventoryByDay: normalizeInventoryByDay(r.inventoryByDay),
+    sponsoredSalesByDay: normalizeSponsoredSalesByDay(r.sponsoredSalesByDay),
+  }
+}
+
 export async function getDashboardSummary(
   systemClientId: number,
   range: DashboardRange = '7d',
@@ -114,4 +175,14 @@ export async function getDashboardSummary(
   const res = await apiFetch(url)
   if (!res.ok) await throwApiError(res, 'Não foi possível carregar o painel.')
   return normalizeDashboardSummary(await res.json())
+}
+
+export async function getDashboardAnalytics(
+  systemClientId: number,
+  range: DashboardRange = '7d',
+): Promise<DashboardAnalytics> {
+  const url = `/api/dashboard/${systemClientId}/analytics?range=${range}`
+  const res = await apiFetch(url)
+  if (!res.ok) await throwApiError(res, 'Não foi possível carregar os dados analíticos.')
+  return normalizeDashboardAnalytics(await res.json())
 }
