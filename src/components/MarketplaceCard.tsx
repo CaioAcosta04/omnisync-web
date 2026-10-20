@@ -16,16 +16,24 @@ export type MarketplaceCardData = {
 
 type MarketplaceCardProps = {
   marketplace: MarketplaceCardData
-  onManage?: () => void
-  onDisconnect?: () => void
+  canManage?: boolean
+  disconnectConfirmationOpen?: boolean
+  onRequestDisconnect?: () => void
+  onCancelDisconnect?: () => void
+  onConfirmDisconnect?: () => void
   onConnect?: () => void
+  disconnecting?: boolean
 }
 
 export function MarketplaceCard({
   marketplace,
-  onManage,
-  onDisconnect,
+  canManage = false,
+  disconnectConfirmationOpen = false,
+  onRequestDisconnect,
+  onCancelDisconnect,
+  onConfirmDisconnect,
   onConnect,
+  disconnecting = false,
 }: MarketplaceCardProps) {
   const { name, apiType, icon, connected, integrationActive, lastSyncLabel, disabled, reconnectRequired } =
     marketplace
@@ -97,30 +105,47 @@ export function MarketplaceCard({
           </div>
         </div>
 
-        {!disabled && (
+        {!disabled && canManage && (
           <div style={styles.actions}>
             {connected && integrationActive ? (
-              <>
+              disconnectConfirmationOpen ? (
+                <div style={styles.confirmDisconnect} role="alertdialog" aria-label="Confirmar encerramento da conexão">
+                  <p style={styles.confirmText}>
+                    Encerrar a conexão com o Mercado Livre? Será necessário autorizar a conta novamente para sincronizar.
+                  </p>
+                  <div style={styles.confirmActions}>
+                    <button
+                      type="button"
+                      style={styles.btnCancel}
+                      onClick={() => onCancelDisconnect?.()}
+                      disabled={disconnecting}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      style={{ ...styles.btnConfirmDisconnect, ...(disconnecting ? styles.btnDisabled : {}) }}
+                      onClick={() => onConfirmDisconnect?.()}
+                      disabled={disconnecting}
+                    >
+                      {disconnecting ? 'Encerrando conexão…' : 'Confirmar encerramento'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  style={styles.btnPrimary}
-                  onClick={() => onManage?.()}
-                >
-                  Gerenciar Conexão
-                </button>
-                <button
-                  type="button"
-                  style={styles.btnIcon}
-                  aria-label="Desconectar marketplace"
-                  onClick={() => onDisconnect?.()}
+                  style={styles.btnDisconnect}
+                  onClick={() => onRequestDisconnect?.()}
                 >
                   <FiLink2 size={18} />
+                  Encerrar conexão
                 </button>
-              </>
+              )
             ) : (
               <button type="button" style={styles.btnConnect} onClick={() => onConnect?.()}>
                 <FiPlus size={18} />
-                {reconnectRequired ? 'Reconectar Mercado Livre' : 'Conectar Marketplace'}
+                {reconnectRequired ? 'Reconectar Mercado Livre' : `Conectar ${name}`}
               </button>
             )}
           </div>
@@ -264,29 +289,67 @@ const styles = {
     gap: '10px',
     marginTop: '4px',
   },
-  btnPrimary: {
+  btnDisconnect: {
     flex: 1,
-    maxWidth: '280px',
+    maxWidth: '320px',
     padding: '12px 18px',
     borderRadius: '10px',
-    border: 'none',
+    border: '1px solid #dc2626',
     fontFamily: 'inherit',
     fontSize: '14px',
     fontWeight: 600,
-    color: '#ffffff',
-    backgroundColor: '#6d28d9',
-    cursor: 'pointer',
-  },
-  btnIcon: {
-    width: '44px',
-    height: '44px',
-    borderRadius: '10px',
-    border: '1px solid #d1d5db',
+    color: '#b91c1c',
     backgroundColor: '#ffffff',
-    color: '#4b5563',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: '8px',
+    cursor: 'pointer',
+  },
+  btnDisabled: {
+    opacity: 0.6,
+    cursor: 'default' as const,
+  },
+  confirmDisconnect: {
+    flex: 1,
+    maxWidth: '520px',
+    padding: '14px',
+    borderRadius: '10px',
+    border: '1px solid #fecaca',
+    backgroundColor: '#fef2f2',
+  },
+  confirmText: {
+    margin: 0,
+    color: '#991b1b',
+    fontSize: '13px',
+    lineHeight: 1.5,
+  },
+  confirmActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '8px',
+    marginTop: '12px',
+  },
+  btnCancel: {
+    padding: '9px 14px',
+    borderRadius: '8px',
+    border: '1px solid #d1d5db',
+    backgroundColor: '#ffffff',
+    color: '#374151',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  btnConfirmDisconnect: {
+    padding: '9px 14px',
+    borderRadius: '8px',
+    border: 'none',
+    backgroundColor: '#dc2626',
+    color: '#ffffff',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    fontWeight: 600,
     cursor: 'pointer',
   },
   btnConnect: {

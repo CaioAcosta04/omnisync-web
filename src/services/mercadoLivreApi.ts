@@ -38,3 +38,11 @@ export async function exchangeMercadoLivreCode(
   if (!res.ok) await throwApiError(res, 'Falha ao conectar a conta do Mercado Livre.')
   return (await res.json()) as MercadoLivreIntegrationResponse
 }
+
+export async function disconnectMercadoLivre(systemClientId: number): Promise<void> {
+  const res = await apiFetch(
+    `/api/integrations/mercadolivre/disconnect?systemClientId=${encodeURIComponent(String(systemClientId))}`,
+    { method: 'DELETE' }
+  )
+  if (!res.ok) await throwApiError(res, 'Não foi possível encerrar a conexão com o Mercado Livre.')
+}
