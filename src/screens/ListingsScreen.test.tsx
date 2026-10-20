@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ListingsScreen } from './ListingsScreen'
@@ -97,5 +97,100 @@ describe('sincronização manual em ListingsScreen', () => {
       'Última tentativa falhou. Tentar novamente'
     )
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('organização da tela de anúncios', () => {
+  beforeEach(() => {
+    mocks.listProducts.mockResolvedValue({
+      content: [
+        {
+          id: 1,
+          sku: 'SKU-B',
+          name: 'Produto B',
+          description: '',
+          stock: 4,
+          reserved_stock: 1,
+          minimum_stock: 0,
+          price: 20,
+          resource: {
+            mercado_livre: {
+              item_id: 'MLB20',
+              status: 'paused',
+              last_updated: '2026-10-02T12:00:00Z',
+              raw: { date_created: '2026-09-02T12:00:00Z' },
+            },
+          },
+          system_client_id: 7,
+          active: true,
+          created_at: '2026-08-02T12:00:00Z',
+        },
+        {
+          id: 2,
+          sku: 'SKU-A',
+          name: 'Produto A',
+          description: '',
+          stock: 9,
+          reserved_stock: 1,
+          minimum_stock: 0,
+          price: 10,
+          resource: {
+            mercado_livre: {
+              item_id: 'MLB10',
+              status: 'active',
+              last_updated: '2026-10-01T12:00:00Z',
+              raw: { date_created: '2026-09-01T12:00:00Z' },
+            },
+          },
+          system_client_id: 7,
+          active: true,
+          created_at: '2026-08-01T12:00:00Z',
+        },
+      ],
+      totalElements: 2,
+      totalPages: 1,
+      number: 0,
+      size: 200,
+    })
+  })
+
+  it('posiciona o título antes da pesquisa e identifica o último anúncio adicionado', async () => {
+    render(<ListingsScreen />)
+    await screen.findByText('Produto A')
+
+    const heading = screen.getByRole('heading', { name: 'Anúncios do Mercado Livre' })
+    const search = screen.getByPlaceholderText('Buscar por título, SKU ou item ID...')
+    expect(heading.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const lastAddedLabel = screen.getByText('Último anúncio adicionado')
+    expect(within(lastAddedLabel.parentElement as HTMLElement).getByText('Produto B')).toBeInTheDocument()
+    expect(screen.queryByText('Última Sincronização')).not.toBeInTheDocument()
+  })
+
+  it('permite ordenar individualmente todas as colunas', async () => {
+    render(<ListingsScreen />)
+    await screen.findByText('Produto A')
+
+    const labels = [
+      'TÍTULO DO ANÚNCIO',
+      'ITEM ID',
+      'DISPONÍVEL',
+      'PREÇO',
+      'ÚLTIMA ATUALIZAÇÃO',
+      'STATUS',
+    ]
+
+    for (const label of labels) {
+      const button = screen.getByRole('button', { name: `Ordenar por ${label}` })
+      await userEvent.click(button)
+      expect(button.closest('th')).toHaveAttribute('aria-sort', 'ascending')
+    }
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ordenar por TÍTULO DO ANÚNCIO' }))
+    const rows = screen.getByRole('table').querySelectorAll<HTMLTableRowElement>('tbody tr')
+    expect(within(rows[0]).getByText('Produto A')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ordenar por TÍTULO DO ANÚNCIO' }))
+    const descendingRows = screen.getByRole('table').querySelectorAll<HTMLTableRowElement>('tbody tr')
+    expect(within(descendingRows[0]).getByText('Produto B')).toBeInTheDocument()
   })
 })
