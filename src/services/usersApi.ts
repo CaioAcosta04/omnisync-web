@@ -18,6 +18,16 @@ export async function updateUser(id: number, data: UserUpdateRequest): Promise<U
   return (await res.json()) as UserDto
 }
 
+export async function updateOwnProfile(data: Pick<UserUpdateRequest, 'name' | 'email'>): Promise<UserDto> {
+  const res = await apiFetch('/api/users/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) await throwApiError(res, 'Não foi possível atualizar o perfil.')
+  return (await res.json()) as UserDto
+}
+
 export async function updateUserStatus(id: number, active: boolean): Promise<UserDto> {
   const res = await apiFetch(`/api/users/${id}/status`, {
     method: 'PATCH',

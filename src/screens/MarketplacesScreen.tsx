@@ -17,7 +17,12 @@ import {
   writeMercadoLivreIntegrationFromStatus,
 } from '../lib/mercadoLivreStorage'
 import { logMlEvent } from '../lib/mlOAuthDebug'
-import { fetchMercadoLivreConnectUrl, getMercadoLivreStatus } from '../services/mercadoLivreApi'
+import { hasIntegrationManagePermission } from '../lib/userResource'
+import {
+  disconnectMercadoLivre,
+  fetchMercadoLivreConnectUrl,
+  getMercadoLivreStatus,
+} from '../services/mercadoLivreApi'
 
 type TabId = 'all' | 'connected' | 'pending'
 
@@ -96,6 +101,8 @@ export function MarketplacesScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [connectError, setConnectError] = useState<string | null>(null)
   const [connectLoading, setConnectLoading] = useState(false)
+  const [disconnectLoading, setDisconnectLoading] = useState(false)
+  const [disconnectConfirmationOpen, setDisconnectConfirmationOpen] = useState(false)
   const [stored, setStored] = useState(() => readMercadoLivreIntegration())
 
   const reloadStored = useCallback(() => {
@@ -142,6 +149,7 @@ export function MarketplacesScreen() {
   }, [user, mlStatus, catalogRevision])
 
   const systemClientId = user?.systemClientId
+  const canManageIntegration = hasIntegrationManagePermission(user)
   const hasIntegration =
     stored != null &&
     systemClientId != null &&
@@ -203,9 +211,24 @@ export function MarketplacesScreen() {
     }
   }
 
-  const handleDisconnect = () => {
-    clearMercadoLivreIntegration()
-    reloadStored()
+  const handleDisconnect = async () => {
+    if (systemClientId == null || disconnectLoading) return
+    setConnectError(null)
+    setDisconnectLoading(true)
+    try {
+      await disconnectMercadoLivre(systemClientId)
+      clearMercadoLivreIntegration()
+      reloadStored()
+      setDisconnectConfirmationOpen(false)
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'Não foi possível encerrar a conexão com o Mercado Livre.'
+      setConnectError(msg)
+    } finally {
+      setDisconnectLoading(false)
+    }
   }
 
   return (
@@ -270,8 +293,20 @@ export function MarketplacesScreen() {
               <div key={m.id} role="listitem">
                 <MarketplaceCard
                   marketplace={{ ...m, disabled }}
+                  canManage={canManageIntegration}
                   onConnect={disabled ? undefined : handleConnect}
-                  onDisconnect={disabled ? undefined : handleDisconnect}
+                  disconnectConfirmationOpen={m.id === 'mercadolivre' && disconnectConfirmationOpen}
+                  onRequestDisconnect={
+                    disabled ? undefined : () => {
+                      setConnectError(null)
+                      setDisconnectConfirmationOpen(true)
+                    }
+                  }
+                  onCancelDisconnect={
+                    disabled ? undefined : () => setDisconnectConfirmationOpen(false)
+                  }
+                  onConfirmDisconnect={disabled ? undefined : handleDisconnect}
+                  disconnecting={m.id === 'mercadolivre' && disconnectLoading}
                 />
               </div>
             )

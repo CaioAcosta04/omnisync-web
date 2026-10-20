@@ -7,6 +7,46 @@ export function hasUserManagePermission(user: { permissions?: string[]; resource
     ['USER_MANAGE', 'PERM_USER_MANAGE', 'GESTÃO DE USUÁRIOS', 'USER MANAGEMENT', 'ACESSO TOTAL', 'FULL ACCESS'].includes(permission.trim().toUpperCase()))
 }
 
+export function hasIntegrationManagePermission(
+  user: { role?: string; permissions?: string[]; resource?: Record<string, unknown> | null } | null | undefined
+): boolean {
+  if (!user) return false
+  const permissions = Array.isArray(user.permissions)
+    ? user.permissions
+    : Array.isArray(user.resource?.permissions)
+      ? (user.resource.permissions as string[])
+      : null
+
+  if (permissions == null) {
+    return (user.role ?? user.resource?.role ?? '').toString().trim().toUpperCase() === 'ADMIN'
+  }
+
+  return permissions.some((permission) => {
+    if (typeof permission !== 'string') return false
+    return ['INTEGRATION_MANAGE', 'PERM_INTEGRATION_MANAGE', 'MARKETPLACES', 'ACESSO TOTAL', 'FULL ACCESS']
+      .includes(permission.trim().toUpperCase())
+  })
+}
+
+export function hasSettingsManagePermission(
+  user: { role?: string; permissions?: string[]; resource?: Record<string, unknown> | null } | null | undefined
+): boolean {
+  if (!user) return false
+  const permissions = Array.isArray(user.permissions)
+    ? user.permissions
+    : Array.isArray(user.resource?.permissions)
+      ? (user.resource.permissions as string[])
+      : null
+
+  if (permissions == null) {
+    return (user.role ?? user.resource?.role ?? '').toString().trim().toUpperCase() === 'ADMIN'
+  }
+
+  return permissions.some((permission) => typeof permission === 'string' && [
+    'SETTINGS_MANAGE', 'PERM_SETTINGS_MANAGE', 'ACESSO TOTAL', 'FULL ACCESS',
+  ].includes(permission.trim().toUpperCase()))
+}
+
 const VALID_ROLES: UserRole[] = ['admin', 'manager', 'editor', 'viewer']
 
 const DEFAULT_PERMISSIONS_BY_ROLE: Record<UserRole, string[]> = {

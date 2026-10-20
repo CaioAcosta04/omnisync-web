@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   FiCheckCircle,
+  FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronUp,
   FiClock,
   FiExternalLink,
   FiFileText,
@@ -32,6 +34,10 @@ type TabId = 'all' | 'active' | 'paused' | 'closed'
 
 type MlListingStatus = 'active' | 'paused' | 'closed' | 'unknown'
 
+type SortKey = 'title' | 'itemId' | 'available' | 'price' | 'lastUpdated' | 'status'
+
+type SortDirection = 'asc' | 'desc'
+
 type MlListing = {
   productId: number
   itemId: string
@@ -42,6 +48,7 @@ type MlListing = {
   price: number
   status: MlListingStatus
   permalink: string | null
+  createdAt: string | null
   lastUpdated: string | null
 }
 
@@ -78,6 +85,7 @@ function normalizeStatus(raw: unknown): MlListingStatus {
 function toMlListing(p: ProductDto): MlListing | null {
   const ml = p.resource?.mercado_livre as Record<string, unknown> | undefined
   if (!ml?.item_id) return null
+  const raw = ml.raw as Record<string, unknown> | undefined
   return {
     productId: p.id,
     itemId: String(ml.item_id),
@@ -88,8 +96,19 @@ function toMlListing(p: ProductDto): MlListing | null {
     price: p.price,
     status: normalizeStatus(ml.status),
     permalink: ml.permalink ? String(ml.permalink) : null,
+    createdAt: ml.date_created
+      ? String(ml.date_created)
+      : raw?.date_created
+        ? String(raw.date_created)
+        : p.created_at ?? null,
     lastUpdated: ml.last_updated ? String(ml.last_updated) : p.created_at ?? null,
   }
+}
+
+function dateValue(value: string | null): number {
+  if (value == null) return Number.NEGATIVE_INFINITY
+  const timestamp = Date.parse(value)
+  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -112,6 +131,8 @@ export function ListingsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
+  const [sortKey, setSortKey] = useState<SortKey>('lastUpdated')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
   const [showSelectProductModal, setShowSelectProductModal] = useState(false)
@@ -201,12 +222,28 @@ export function ListingsScreen() {
     return list
   }, [allListings, activeTab, searchQuery])
 
-  const totalPages = Math.max(1, Math.ceil(filteredListings.length / ITEMS_PER_PAGE))
+  const sortedListings = useMemo(() => {
+    const direction = sortDirection === 'asc' ? 1 : -1
+    return [...filteredListings].sort((a, b) => {
+      if (sortKey === 'available' || sortKey === 'price') {
+        return (a[sortKey] - b[sortKey]) * direction
+      }
+      if (sortKey === 'lastUpdated') {
+        return (dateValue(a.lastUpdated) - dateValue(b.lastUpdated)) * direction
+      }
+
+      const first = sortKey === 'status' ? STATUS_CONFIG[a.status].label : a[sortKey]
+      const second = sortKey === 'status' ? STATUS_CONFIG[b.status].label : b[sortKey]
+      return first.localeCompare(second, 'pt-BR', { numeric: true, sensitivity: 'base' }) * direction
+    })
+  }, [filteredListings, sortDirection, sortKey])
+
+  const totalPages = Math.max(1, Math.ceil(sortedListings.length / ITEMS_PER_PAGE))
 
   const paginatedListings = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE
-    return filteredListings.slice(start, start + ITEMS_PER_PAGE)
-  }, [filteredListings, currentPage])
+    return sortedListings.slice(start, start + ITEMS_PER_PAGE)
+  }, [sortedListings, currentPage])
 
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === selectedProductId) ?? null,
@@ -216,12 +253,11 @@ export function ListingsScreen() {
   const stats = useMemo(() => {
     const active = allListings.filter((l) => l.status === 'active').length
     const inactive = allListings.filter((l) => l.status !== 'active').length
-    const lastUpdated = allListings
-      .map((l) => l.lastUpdated)
-      .filter((d): d is string => d != null)
-      .sort()
-      .at(-1)
-    return { total: allListings.length, active, inactive, lastUpdated }
+    const lastAdded = allListings
+      .filter((listing) => listing.createdAt != null)
+      .sort((a, b) => dateValue(a.createdAt) - dateValue(b.createdAt))
+      .at(-1) ?? null
+    return { total: allListings.length, active, inactive, lastAdded }
   }, [allListings])
 
   const handleTabChange = (tab: TabId) => {
@@ -232,6 +268,44 @@ export function ListingsScreen() {
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
     setCurrentPage(1)
+  }
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDirection('asc')
+    }
+    setCurrentPage(1)
+  }
+
+  const renderSortHeader = (
+    key: SortKey,
+    label: string,
+    style: React.CSSProperties = styles.th
+  ) => {
+    const active = sortKey === key
+    return (
+      <th
+        style={style}
+        aria-sort={active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <button
+          type="button"
+          style={{ ...styles.sortButton, ...(active ? styles.sortButtonActive : {}) }}
+          onClick={() => handleSort(key)}
+          aria-label={`Ordenar por ${label}`}
+        >
+          {label}
+          {active ? (
+            sortDirection === 'asc' ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />
+          ) : (
+            <span style={styles.sortNeutral} aria-hidden="true">↕</span>
+          )}
+        </button>
+      </th>
+    )
   }
 
   const renderPagination = () => {
@@ -295,6 +369,29 @@ export function ListingsScreen() {
 
   return (
     <div style={styles.page}>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.headerLeft}>
+          <div style={styles.mlLogoWrap}>
+            <img
+              src="https://http2.mlstatic.com/frontend-assets/ml-web-navigation/ui-navigation/5.21.22/mercadolibre/logo__large_plus@2x.png"
+              alt="Mercado Livre"
+              style={styles.mlLogo}
+            />
+          </div>
+          <div>
+            <h1 style={styles.title}>Anúncios do Mercado Livre</h1>
+            <p style={styles.subtitle}>
+              Gerencie e acompanhe seus anúncios publicados no Mercado Livre.
+            </p>
+          </div>
+        </div>
+        <button type="button" style={styles.reportBtn} onClick={() => setReportOpen(true)}>
+          <FiFileText size={16} />
+          Gerar relatório
+        </button>
+      </div>
+
       {/* Top bar */}
       <div style={styles.topBar}>
         <div style={styles.searchWrap}>
@@ -349,29 +446,6 @@ export function ListingsScreen() {
             {isSyncing ? 'Sincronizando…' : 'Sincronizar ML'}
           </button>
         </div>
-      </div>
-
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <div style={styles.mlLogoWrap}>
-            <img
-              src="https://http2.mlstatic.com/frontend-assets/ml-web-navigation/ui-navigation/5.21.22/mercadolibre/logo__large_plus@2x.png"
-              alt="Mercado Livre"
-              style={styles.mlLogo}
-            />
-          </div>
-          <div>
-            <h1 style={styles.title}>Anúncios do Mercado Livre</h1>
-            <p style={styles.subtitle}>
-              Gerencie e acompanhe seus anúncios publicados no Mercado Livre.
-            </p>
-          </div>
-        </div>
-        <button type="button" style={styles.reportBtn} onClick={() => setReportOpen(true)}>
-          <FiFileText size={16} />
-          Gerar relatório
-        </button>
       </div>
 
       {/* Error banner */}
@@ -497,12 +571,12 @@ export function ListingsScreen() {
                 <table style={styles.table}>
                   <thead>
                     <tr>
-                      <th style={{ ...styles.th, ...styles.thFirst }}>TÍTULO DO ANÚNCIO</th>
-                      <th style={styles.th}>ITEM ID</th>
-                      <th style={styles.th}>DISPONÍVEL</th>
-                      <th style={styles.th}>PREÇO</th>
-                      <th style={styles.th}>ÚLTIMA ATUALIZAÇÃO</th>
-                      <th style={{ ...styles.th, ...styles.thLast }}>STATUS</th>
+                      {renderSortHeader('title', 'TÍTULO DO ANÚNCIO', { ...styles.th, ...styles.thFirst })}
+                      {renderSortHeader('itemId', 'ITEM ID')}
+                      {renderSortHeader('available', 'DISPONÍVEL')}
+                      {renderSortHeader('price', 'PREÇO')}
+                      {renderSortHeader('lastUpdated', 'ÚLTIMA ATUALIZAÇÃO')}
+                      {renderSortHeader('status', 'STATUS', { ...styles.th, ...styles.thLast })}
                     </tr>
                   </thead>
                   <tbody>
@@ -613,9 +687,9 @@ export function ListingsScreen() {
                   <FiClock size={20} />
                 </div>
                 <div>
-                  <span style={styles.footerLabel}>Última Sincronização</span>
-                  <span style={styles.footerValue}>
-                    {stats.lastUpdated ? formatRelative(stats.lastUpdated) : '—'}
+                  <span style={styles.footerLabel}>Último anúncio adicionado</span>
+                  <span style={styles.footerValue} title={stats.lastAdded?.title}>
+                    {stats.lastAdded?.title ?? '—'}
                   </span>
                 </div>
               </div>
@@ -732,17 +806,6 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-  },
-  bellBtn: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '10px',
-    border: '1px solid #e5e7eb',
-    backgroundColor: '#ffffff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
   },
   syncBtn: {
     display: 'inline-flex',
@@ -1029,6 +1092,27 @@ const styles = {
   },
   thFirst: { paddingLeft: '24px' },
   thLast: { paddingRight: '24px' },
+  sortButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+    padding: 0,
+    border: 'none',
+    backgroundColor: 'transparent',
+    color: 'inherit',
+    font: 'inherit',
+    letterSpacing: 'inherit',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+  },
+  sortButtonActive: {
+    color: '#111827',
+  },
+  sortNeutral: {
+    color: '#9ca3af',
+    fontSize: '13px',
+    lineHeight: 1,
+  },
   tr: { borderBottom: '1px solid #f3f4f6' },
   trClickable: {
     borderBottom: '1px solid #f3f4f6',

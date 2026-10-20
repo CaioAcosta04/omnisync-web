@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  hasIntegrationManagePermission,
   hasProductReadPermission,
   parseUserPermissions,
   parseUserRole,
@@ -24,5 +25,18 @@ describe('permissões individuais do usuário', () => {
     expect(hasProductReadPermission({ permissions: ['PERM_PRODUCT_READ'] })).toBe(true)
     expect(hasProductReadPermission({ resource: { permissions: ['Vendas'] } })).toBe(false)
     expect(hasProductReadPermission({ role: 'viewer' })).toBe(true)
+  })
+})
+
+describe('hasIntegrationManagePermission', () => {
+  it('uses explicit permissions and does not grant access from a conflicting role', () => {
+    expect(hasIntegrationManagePermission({ permissions: ['INTEGRATION_MANAGE'] })).toBe(true)
+    expect(hasIntegrationManagePermission({ permissions: [], role: 'admin' })).toBe(false)
+    expect(hasIntegrationManagePermission({ resource: { permissions: ['Marketplaces'] } })).toBe(true)
+  })
+
+  it('falls back to the fixed admin profile only when permissions are absent', () => {
+    expect(hasIntegrationManagePermission({ role: 'admin' })).toBe(true)
+    expect(hasIntegrationManagePermission({ role: 'manager' })).toBe(false)
   })
 })
