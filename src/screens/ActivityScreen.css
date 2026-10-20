@@ -1,0 +1,29 @@
+.activity-page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-self: flex-start;
+  color: #111827;
+}
+
+.activity-main-col {
+  width: 100%;
+  min-width: 0;
+}
+
+.activity-chart-section {
+  width: 100%;
+}
+
+.activity-chart-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.activity-chart-scroll-inner {
+  min-width: 600px;
+}

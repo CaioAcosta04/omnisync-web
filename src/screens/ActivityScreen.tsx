@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   FiAlertCircle,
   FiAlertTriangle,
+  FiBarChart2,
   FiCheckCircle,
   FiChevronDown,
   FiClipboard,
@@ -17,11 +18,16 @@ import { useAppNavigation } from '../contexts/AppNavigationContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
 import { formatRelative } from '../lib/relativeTime'
-import { getMercadoLivreStatus } from '../services/mercadoLivreApi'
+import {
+  ACTIVITY_MARKETPLACE_OPTIONS,
+  getActivitySummary,
+  type ActivityMarketplace,
+  type ActivitySalesHour,
+} from '../services/activityApi'
 import { listProducts } from '../services/productsApi'
 import { getSaleById, listSales } from '../services/salesApi'
-import type { MercadoLivreIntegrationStatusResponse } from '../types/mercadolivre'
 import type { SaleChannel, SaleDto } from '../types/sale'
+import './ActivityScreen.css'
 
 // ─── Domain types ────────────────────────────────────────────────────────────
 
@@ -76,43 +82,20 @@ const CHANNEL_DISPLAY: Record<SaleChannel, { label: string; letter: string; colo
 }
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+const NUM = new Intl.NumberFormat('pt-BR')
 
 const PAGE_SIZE = 50
 
-// ─── Saúde dos canais ──────────────────────────────────────────────────────────
-
-type ChannelHealthTone = 'online' | 'attention' | 'offline'
-
-const HEALTH_TONE_STYLE: Record<ChannelHealthTone, { dot: string; color: string }> = {
-  online: { dot: '#22c55e', color: '#16a34a' },
-  attention: { dot: '#f59e0b', color: '#d97706' },
-  offline: { dot: '#9ca3af', color: '#6b7280' },
+function getTodayIsoDate(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-/** Deriva o estado de saúde do canal a partir do status real da integração. */
-function deriveChannelHealth(status: MercadoLivreIntegrationStatusResponse | null): {
-  tone: ChannelHealthTone
-  label: string
-  detail: string
-} {
-  if (!status || !status.connected) {
-    return { tone: 'offline', label: 'Não conectado', detail: 'Conecte em Marketplaces.' }
-  }
-  if (status.active === false) {
-    return { tone: 'attention', label: 'Reconexão necessária', detail: 'A autorização expirou.' }
-  }
-  const expired = status.expiresAt ? new Date(status.expiresAt).getTime() <= Date.now() : false
-  if (expired) {
-    return {
-      tone: 'attention',
-      label: 'Token expirando',
-      detail: 'Será renovado na próxima sincronização.',
-    }
-  }
-  const detail = status.lastSyncAt
-    ? `Sincronizado ${formatRelative(status.lastSyncAt)}`
-    : 'Ainda não sincronizado.'
-  return { tone: 'online', label: 'Conectado', detail }
+function formatHourLabel(hour: number): string {
+  return `${String(hour).padStart(2, '0')}h`
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -205,10 +188,34 @@ export function ActivityScreen() {
   const [totalElements, setTotalElements] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
-  const [channelStatus, setChannelStatus] = useState<MercadoLivreIntegrationStatusResponse | null>(
-    null,
+
+  // Filtro de marketplace e gráfico de vendas por hora
+  const [selectedMarketplace, setSelectedMarketplace] = useState<string>('')
+  const [salesByHour, setSalesByHour] = useState<ActivitySalesHour[]>([])
+  const [loadingHourly, setLoadingHourly] = useState(false)
+  const [hourlyError, setHourlyError] = useState<string | null>(null)
+
+  const fetchHourlySales = useCallback(
+    async (marketplaceFilter: string) => {
+      if (systemClientId == null) return
+      setLoadingHourly(true)
+      setHourlyError(null)
+      try {
+        const todayIso = getTodayIsoDate()
+        const summary = await getActivitySummary(
+          systemClientId,
+          todayIso,
+          marketplaceFilter ? (marketplaceFilter as ActivityMarketplace) : null,
+        )
+        setSalesByHour(summary.salesByHour)
+      } catch (e) {
+        setHourlyError(e instanceof Error ? e.message : 'Erro ao carregar vendas por hora.')
+      } finally {
+        setLoadingHourly(false)
+      }
+    },
+    [systemClientId],
   )
-  const [channelStatusLoading, setChannelStatusLoading] = useState(true)
 
   const fetchActivity = useCallback(async () => {
     if (systemClientId == null) return
@@ -274,50 +281,46 @@ export function ActivityScreen() {
 
       if (page.content.length === 0) {
         setSales([])
-        return
+      } else {
+        const [detailed, productsPage] = await Promise.all([
+          Promise.all(page.content.map((s) => getSaleById(systemClientId, s.id))),
+          listProducts(systemClientId, 0, 200),
+        ])
+
+        setSales(detailed)
+        setProductNames(
+          Object.fromEntries(productsPage.content.map((p) => [p.id, p.name])),
+        )
       }
 
-      const [detailed, productsPage] = await Promise.all([
-        Promise.all(page.content.map((s) => getSaleById(systemClientId, s.id))),
-        listProducts(systemClientId, 0, 200),
-      ])
-
-      setSales(detailed)
-      setProductNames(
-        Object.fromEntries(productsPage.content.map((p) => [p.id, p.name])),
-      )
+      await fetchHourlySales(selectedMarketplace)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao sincronizar atividade.')
     } finally {
       setSyncing(false)
     }
-  }, [systemClientId, syncing, loading])
-
-  const fetchChannelStatus = useCallback(async () => {
-    if (systemClientId == null) return
-    setChannelStatusLoading(true)
-    try {
-      setChannelStatus(await getMercadoLivreStatus())
-    } catch {
-      // Sem status → tratamos como "não conectado" na derivação.
-      setChannelStatus(null)
-    } finally {
-      setChannelStatusLoading(false)
-    }
-  }, [systemClientId])
+  }, [systemClientId, syncing, loading, fetchHourlySales, selectedMarketplace])
 
   useEffect(() => {
     // A revisão é um sinal de invalidação, não um parâmetro da API.
     void catalogRevision
     void fetchActivity()
-    void fetchChannelStatus()
-  }, [catalogRevision, fetchActivity, fetchChannelStatus])
+  }, [catalogRevision, fetchActivity])
+
+  useEffect(() => {
+    void fetchHourlySales(selectedMarketplace)
+  }, [fetchHourlySales, selectedMarketplace])
 
   const allEvents = useMemo<ActivityEvent[]>(() => {
-    const events = sales.flatMap((sale) => saleToEvents(sale, productNames))
+    let salesToConvert = sales
+    if (selectedMarketplace) {
+      salesToConvert = sales.filter((s) => s.channel === selectedMarketplace)
+    }
+
+    const events = salesToConvert.flatMap((sale) => saleToEvents(sale, productNames))
     events.sort((a, b) => new Date(b.isoDate).getTime() - new Date(a.isoDate).getTime())
     return events
-  }, [sales, productNames])
+  }, [sales, productNames, selectedMarketplace])
 
   const filteredEvents = useMemo(() => {
     let events = allEvents
@@ -347,6 +350,20 @@ export function ActivityScreen() {
   const olderEvents = filteredEvents.filter((e) => e.day === 'older')
 
   const hasMore = sales.length < totalElements
+
+  // Estatísticas agregadas do gráfico de vendas por hora
+  const totalHourlyRevenue = useMemo(
+    () => salesByHour.reduce((acc, curr) => acc + curr.total, 0),
+    [salesByHour],
+  )
+  const totalHourlyCount = useMemo(
+    () => salesByHour.reduce((acc, curr) => acc + curr.count, 0),
+    [salesByHour],
+  )
+  const maxHourlyRevenue = useMemo(
+    () => salesByHour.reduce((max, curr) => Math.max(max, curr.total), 0),
+    [salesByHour],
+  )
 
   const renderEventCard = (event: ActivityEvent) => {
     const cfg = EVENT_STYLE[event.type]
@@ -455,8 +472,8 @@ export function ActivityScreen() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.mainCol}>
+    <div className="activity-page" style={styles.page}>
+      <div className="activity-main-col" style={styles.mainCol}>
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.headerLeft}>
@@ -521,6 +538,29 @@ export function ActivityScreen() {
                 {t.label}
               </button>
             ))}
+          </div>
+
+          {/* Filtro dropdown de marketplace */}
+          <div style={styles.dropdownFilterWrap}>
+            <label htmlFor="activity-marketplace-filter" style={styles.filterSelectLabel}>
+              Marketplace:
+            </label>
+            <div style={styles.selectContainer}>
+              <select
+                id="activity-marketplace-filter"
+                aria-label="Filtrar por marketplace"
+                value={selectedMarketplace}
+                onChange={(e) => setSelectedMarketplace(e.target.value)}
+                style={styles.dropdownSelect}
+              >
+                {ACTIVITY_MARKETPLACE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <FiChevronDown size={14} color="#6b7280" style={styles.selectIcon} />
+            </div>
           </div>
         </div>
 
@@ -608,40 +648,79 @@ export function ActivityScreen() {
         )}
       </div>
 
-      {/* Right sidebar */}
-      <aside style={styles.sidebar}>
-        <h3 style={styles.sidebarSectionTitle}>SAÚDE DOS CANAIS</h3>
-
-        {channelStatusLoading ? (
-          <div style={styles.channelCard}>
-            <span style={styles.channelLoading}>Verificando integração…</span>
+      {/* Gráfico de Vendas por Hora posicionado abaixo no mesmo container */}
+      <section className="activity-chart-section" style={styles.chartSection}>
+        <div style={styles.statCard}>
+          <div style={styles.statHeader}>
+            <div style={styles.statHeaderLeft}>
+              <span style={styles.statTitle}>VENDAS POR HORA (HOJE)</span>
+              <span style={styles.statBadge}>
+                <FiBarChart2 size={12} />
+                {selectedMarketplace
+                  ? (ACTIVITY_MARKETPLACE_OPTIONS.find((o) => o.value === selectedMarketplace)?.label ?? selectedMarketplace)
+                  : 'Todos'}
+              </span>
+            </div>
+            <div style={styles.statSummaryRow}>
+              <span style={styles.statSubLabel}>Faturamento:</span>
+              <strong style={styles.statBigNumber}>{BRL.format(totalHourlyRevenue)}</strong>
+              <span style={styles.statDivider}>·</span>
+              <span style={styles.statSubLabel}>Pedidos:</span>
+              <strong style={styles.statSubValue}>{NUM.format(totalHourlyCount)}</strong>
+            </div>
           </div>
-        ) : (
-          (() => {
-            const health = deriveChannelHealth(channelStatus)
-            const tone = HEALTH_TONE_STYLE[health.tone]
-            return (
-              <div style={styles.channelCard}>
-                <div style={styles.channelHeader}>
-                  <span style={styles.channelBadge}>M</span>
-                  <span style={styles.channelName}>Mercado Livre</span>
-                </div>
-                <div style={styles.channelStatusRow}>
-                  <span style={{ ...styles.channelDot, backgroundColor: tone.dot }} />
-                  <span style={{ ...styles.channelStatusLabel, color: tone.color }}>
-                    {health.label}
-                  </span>
-                </div>
-                <p style={styles.channelDetail}>{health.detail}</p>
-              </div>
-            )
-          })()
-        )}
 
-        <p style={styles.channelHint}>
-          Apenas o Mercado Livre está integrado. Outros canais chegam em breve.
-        </p>
-      </aside>
+          {loadingHourly ? (
+            <div style={styles.chartLoading}>
+              <div style={styles.spinnerSmall} />
+              <span>Atualizando dados por hora…</span>
+            </div>
+          ) : hourlyError ? (
+            <div style={styles.chartError}>{hourlyError}</div>
+          ) : salesByHour.length === 0 ? (
+            <div style={styles.chartEmpty}>Sem registros para a data atual.</div>
+          ) : (
+            <div className="activity-chart-scroll">
+              <div
+                className="activity-chart-scroll-inner"
+                style={{
+                  ...styles.hourlyChartContainer,
+                  gridTemplateColumns: `repeat(${salesByHour.length}, minmax(18px, 1fr))`,
+                }}
+                role="img"
+                aria-label="Gráfico de vendas por hora"
+              >
+                {salesByHour.map((point) => {
+                  const hasSales = point.total > 0
+                  const barHeight =
+                    maxHourlyRevenue > 0
+                      ? `${Math.max(6, (point.total / maxHourlyRevenue) * 100)}%`
+                      : '6%'
+                  const isPeak = hasSales && point.total === maxHourlyRevenue
+
+                  return (
+                    <div key={`hour-${point.hour}`} style={styles.barCol}>
+                      <div
+                        style={{
+                          ...styles.bar,
+                          height: barHeight,
+                          backgroundColor: isPeak
+                            ? '#4f46e5'
+                            : hasSales
+                              ? '#818cf8'
+                              : '#e0e7ff',
+                        }}
+                        title={`${formatHourLabel(point.hour)}: ${BRL.format(point.total)} (${NUM.format(point.count)} venda(s))`}
+                      />
+                      <span style={styles.barLabel}>{formatHourLabel(point.hour)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   )
 }
@@ -653,12 +732,13 @@ const styles = {
     margin: '0 auto',
     padding: '28px 28px 40px',
     display: 'flex',
-    gap: '28px',
+    flexDirection: 'column' as const,
+    gap: '24px',
     alignSelf: 'flex-start',
     color: '#111827',
   },
   mainCol: {
-    flex: 1,
+    width: '100%',
     minWidth: 0,
   },
 
@@ -782,19 +862,40 @@ const styles = {
     color: '#ffffff',
     fontWeight: 600,
   },
-  dropdownBtn: {
+  dropdownFilterWrap: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '8px 14px',
+  },
+  filterSelectLabel: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#4b5563',
+  },
+  selectContainer: {
+    position: 'relative' as const,
+    display: 'inline-flex',
+    alignItems: 'center',
+  },
+  dropdownSelect: {
+    appearance: 'none' as const,
+    WebkitAppearance: 'none' as const,
+    MozAppearance: 'none' as const,
+    padding: '8px 32px 8px 12px',
     borderRadius: '10px',
     border: '1px solid #e5e7eb',
     backgroundColor: '#ffffff',
     fontFamily: 'inherit',
     fontSize: '13px',
-    fontWeight: 500,
+    fontWeight: 600,
     color: '#374151',
     cursor: 'pointer',
+    outline: 'none',
+  },
+  selectIcon: {
+    position: 'absolute' as const,
+    right: '10px',
+    pointerEvents: 'none' as const,
   },
 
   /* Loading */
@@ -810,6 +911,14 @@ const styles = {
     height: '32px',
     borderRadius: '50%',
     border: '3px solid #e5e7eb',
+    borderTopColor: '#4f46e5',
+    animation: 'spin 0.8s linear infinite',
+  },
+  spinnerSmall: {
+    width: '18px',
+    height: '18px',
+    borderRadius: '50%',
+    border: '2px solid #e5e7eb',
     borderTopColor: '#4f46e5',
     animation: 'spin 0.8s linear infinite',
   },
@@ -1042,82 +1151,129 @@ const styles = {
     textUnderlineOffset: '3px',
   },
 
-  /* Sidebar */
-  sidebar: {
-    width: '260px',
-    flexShrink: 0,
+  /* Seção do gráfico posicionada abaixo */
+  chartSection: {
+    width: '100%',
+    marginTop: '12px',
   },
-  sidebarSectionTitle: {
-    fontSize: '11px',
-    fontWeight: 700,
-    letterSpacing: '0.08em',
-    color: '#6b7280',
-    marginBottom: '14px',
-  },
-
-  /* Channel health card */
-  channelCard: {
-    padding: '16px',
+  statCard: {
+    padding: '22px 24px',
     backgroundColor: '#ffffff',
     border: '1px solid #e5e7eb',
-    borderRadius: '12px',
-    marginBottom: '12px',
+    borderRadius: '14px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '10px',
+    gap: '16px',
   },
-  channelHeader: {
+  statHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+    flexWrap: 'wrap' as const,
+    paddingBottom: '12px',
+    borderBottom: '1px solid #f3f4f6',
+  },
+  statHeaderLeft: {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
   },
-  channelBadge: {
-    width: '28px',
-    height: '28px',
-    borderRadius: '8px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffe600',
-    color: '#333333',
+  statTitle: {
     fontSize: '13px',
     fontWeight: 700,
-    flexShrink: 0,
+    letterSpacing: '0.05em',
+    color: '#4b5563',
   },
-  channelName: {
-    fontSize: '14px',
+  statBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '3px 8px',
+    borderRadius: '6px',
+    backgroundColor: '#f3f4f6',
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#4b5563',
+  },
+  statSummaryRow: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '8px',
+  },
+  statSubLabel: {
+    fontSize: '13px',
+    color: '#6b7280',
+  },
+  statBigNumber: {
+    fontSize: '18px',
     fontWeight: 700,
     color: '#111827',
   },
-  channelStatusRow: {
+  statDivider: {
+    color: '#d1d5db',
+    margin: '0 4px',
+  },
+  statSubValue: {
+    fontSize: '15px',
+    fontWeight: 700,
+    color: '#111827',
+  },
+
+  /* Gráfico por hora */
+  hourlyChartContainer: {
+    display: 'grid',
+    alignItems: 'end',
+    gap: '6px',
+    height: '160px',
+    paddingTop: '16px',
+  },
+  barCol: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    height: '100%',
+    minWidth: 0,
+    position: 'relative' as const,
+  },
+  bar: {
+    width: '100%',
+    maxWidth: '24px',
+    minWidth: '6px',
+    borderRadius: '4px 4px 1px 1px',
+    transition: 'height 0.3s ease, background-color 0.2s',
+    cursor: 'pointer',
+  },
+  barLabel: {
+    fontSize: '10px',
+    fontWeight: 600,
+    color: '#9ca3af',
+    marginTop: '8px',
+    whiteSpace: 'nowrap' as const,
+  },
+  chartLoading: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '8px',
-  },
-  channelDot: {
-    width: '9px',
-    height: '9px',
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  channelStatusLabel: {
+    padding: '40px 0',
     fontSize: '13px',
-    fontWeight: 700,
-  },
-  channelDetail: {
-    fontSize: '12px',
     color: '#6b7280',
-    lineHeight: 1.4,
-    margin: 0,
   },
-  channelLoading: {
+  chartError: {
+    padding: '16px',
+    backgroundColor: '#fef2f2',
+    color: '#dc2626',
     fontSize: '13px',
-    color: '#9ca3af',
+    borderRadius: '8px',
+    textAlign: 'center' as const,
   },
-  channelHint: {
-    fontSize: '11px',
+  chartEmpty: {
+    padding: '40px 0',
     color: '#9ca3af',
-    lineHeight: 1.4,
-    margin: 0,
+    fontSize: '13px',
+    textAlign: 'center' as const,
   },
 } as const

@@ -2,10 +2,7 @@ import { useState } from 'react'
 import {
   FiFileText,
   FiLock,
-  FiMonitor,
-  FiMoon,
   FiSave,
-  FiSun,  
   FiUser,
 } from 'react-icons/fi'
 import { BsBuildings } from 'react-icons/bs'
@@ -14,13 +11,12 @@ import { useUserAuthNavigation } from '../contexts/UserAuthNavigationContext'
 import { parseUserRole } from '../lib/userResource'
 import { PasswordForm } from '../components/PasswordForm'
 
-type SettingsTab = 'profile' | 'store' | 'security' | 'appearance'
+type SettingsTab = 'profile' | 'store' | 'security'
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Perfil', icon: <FiUser size={18} /> },
   { id: 'store', label: 'Loja', icon: <BsBuildings size={18} /> },
   { id: 'security', label: 'Segurança', icon: <FiLock size={18} /> },
-  { id: 'appearance', label: 'Aparência', icon: <FiMonitor size={18} /> },
 ]
 
 /* ─── Profile Section ─── */
@@ -138,94 +134,12 @@ function SecuritySection() {
   )
 }
 
-/* ─── Appearance Section ─── */
-
-type ThemeOption = 'light' | 'dark' | 'system'
-type LangOption = 'pt' | 'en'
-
-function AppearanceSection() {
-  const [theme, setTheme] = useState<ThemeOption>('light')
-  const [lang, setLang] = useState<LangOption>('pt')
-
-  const themeOptions: { id: ThemeOption; label: string; icon: React.ReactNode; available: boolean }[] = [
-    { id: 'light', label: 'Claro', icon: <FiSun size={22} />, available: true },
-    { id: 'dark', label: 'Escuro', icon: <FiMoon size={22} />, available: false },
-    { id: 'system', label: 'Sistema', icon: <FiMonitor size={22} />, available: false },
-  ]
-
-  const langOptions: { id: LangOption; label: string; flag: string; available: boolean }[] = [
-    { id: 'pt', label: 'Português', flag: '🇧🇷', available: true },
-    { id: 'en', label: 'English', flag: '🇺🇸', available: false },
-  ]
-
-  return (
-    <div style={s.sectionColumn}>
-      <div style={s.card}>
-        <h3 style={s.cardTitle}>Tema</h3>
-        <p style={s.cardDesc}>Personalize a aparência da plataforma.</p>
-
-        <div style={s.themeGrid}>
-          {themeOptions.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => opt.available && setTheme(opt.id)}
-              style={{
-                ...s.themeCard,
-                borderColor: theme === opt.id ? '#6d28d9' : '#e5e7eb',
-                backgroundColor: theme === opt.id ? '#f5f3ff' : '#ffffff',
-                opacity: opt.available ? 1 : 0.5,
-                cursor: opt.available ? 'pointer' : 'not-allowed',
-              }}
-            >
-              <div style={{ color: theme === opt.id ? '#6d28d9' : '#6b7280' }}>{opt.icon}</div>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: theme === opt.id ? '#6d28d9' : '#374151' }}>
-                {opt.label}
-              </span>
-              {!opt.available && <span style={s.comingSoon}>Em breve</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={s.card}>
-        <h3 style={s.cardTitle}>Idioma</h3>
-        <p style={s.cardDesc}>Selecione o idioma da interface.</p>
-
-        <div style={s.langGrid}>
-          {langOptions.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => opt.available && setLang(opt.id)}
-              style={{
-                ...s.langCard,
-                borderColor: lang === opt.id ? '#6d28d9' : '#e5e7eb',
-                backgroundColor: lang === opt.id ? '#f5f3ff' : '#ffffff',
-                opacity: opt.available ? 1 : 0.5,
-                cursor: opt.available ? 'pointer' : 'not-allowed',
-              }}
-            >
-              <span style={{ fontSize: '24px' }}>{opt.flag}</span>
-              <span style={{ fontSize: '14px', fontWeight: 600, color: lang === opt.id ? '#6d28d9' : '#374151' }}>
-                {opt.label}
-              </span>
-              {!opt.available && <span style={s.comingSoon}>Em breve</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /* ─── Main Settings Screen ─── */
 
 const SECTION_MAP: Record<SettingsTab, () => React.JSX.Element> = {
   profile: ProfileSection,
   store: StoreSection,
   security: SecuritySection,
-  appearance: AppearanceSection,
 }
 
 export function SettingsScreen() {
