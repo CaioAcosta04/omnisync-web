@@ -1,14 +1,4 @@
-<<<<<<< HEAD
-import { useState } from 'react'
-import {
-  FiFileText,
-  FiLock,
-  FiSave,
-  FiUser,
-} from 'react-icons/fi'
-=======
 import { useEffect, useState, type FormEvent } from 'react'
->>>>>>> refs/remotes/origin/main
 import { BsBuildings } from 'react-icons/bs'
 import { FiFileText, FiLock, FiSave, FiUser } from 'react-icons/fi'
 import { PasswordForm } from '../components/PasswordForm'
@@ -18,12 +8,8 @@ import { hasSettingsManagePermission } from '../lib/userResource'
 import { getSystemClient, updateSystemClient } from '../services/systemClientApi'
 import { updateOwnProfile } from '../services/usersApi'
 
-<<<<<<< HEAD
-type SettingsTab = 'profile' | 'store' | 'security'
-=======
 type SettingsTab = 'profile' | 'company' | 'security'
 type Feedback = { kind: 'success' | 'error'; message: string } | null
->>>>>>> refs/remotes/origin/main
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Perfil', icon: <FiUser size={18} /> },
@@ -209,11 +195,8 @@ function SecuritySection() {
   </div></div>
 }
 
-<<<<<<< HEAD
 /* ─── Main Settings Screen ─── */
 
-=======
->>>>>>> refs/remotes/origin/main
 const SECTION_MAP: Record<SettingsTab, () => React.JSX.Element> = {
   profile: ProfileSection,
   company: CompanySection,
