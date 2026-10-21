@@ -6,7 +6,7 @@ describe('criação autenticada de funcionários', () => {
   const fetchMock = vi.fn<typeof fetch>()
   const data = {
     systemClientId: 7, name: 'Funcionário de teste', email: 'member@example.invalid',
-    password: 'test-only-password', resource: { role: 'editor', permissions: ['Vendas'] },
+    password: 'test-only-password', role: 'SELLER',
   }
 
   beforeEach(() => {
@@ -40,5 +40,13 @@ describe('criação autenticada de funcionários', () => {
       status: 403, message: 'Permissão insuficiente: USER_MANAGE',
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('carrega definições e limitações dos perfis fixos', async () => {
+    const definitions = [{ code: 'VIEWER', label: 'Visualizador', permissions: ['PRODUCT_READ'], limitations: ['Somente leitura'] }]
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(definitions), { status: 200 }))
+    const { listRoleDefinitions } = await import('./usersApi')
+    await expect(listRoleDefinitions()).resolves.toEqual(definitions)
+    expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/roles', { credentials: 'include' })
   })
 })

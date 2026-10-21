@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
+export type UserRole = 'admin' | 'manager' | 'seller' | 'viewer'
 
 /** Explicit permissions win, including an empty list. Never grant access from the role name. */
 export function hasUserManagePermission(user: { permissions?: string[]; resource?: Record<string, unknown> | null } | null | undefined): boolean {
@@ -47,12 +47,12 @@ export function hasSettingsManagePermission(
   ].includes(permission.trim().toUpperCase()))
 }
 
-const VALID_ROLES: UserRole[] = ['admin', 'manager', 'editor', 'viewer']
+const VALID_ROLES: UserRole[] = ['admin', 'manager', 'seller', 'viewer']
 
 const DEFAULT_PERMISSIONS_BY_ROLE: Record<UserRole, string[]> = {
   admin: ['Acesso total', 'Faturamento', 'Gestão de usuários'],
   manager: ['Gestão de estoque', 'Anúncios', 'Vendas'],
-  editor: ['Anúncios', 'Gestão de estoque'],
+  seller: ['PRODUCT_READ', 'LISTING_PUBLISH', 'SALE_READ', 'SALE_WRITE'],
   viewer: ['Somente leitura'],
 }
 
@@ -136,7 +136,7 @@ export function parseUserRole(resource: Record<string, unknown> | null | undefin
   const raw = resource?.role
   if (typeof raw === 'string') {
     const normalized = raw.toLowerCase()
-    if (normalized === 'seller') return 'editor'
+    if (normalized === 'editor') return 'seller'
     if (VALID_ROLES.includes(normalized as UserRole)) {
       return normalized as UserRole
     }
@@ -153,18 +153,6 @@ export function parseUserPermissions(
     return raw as string[]
   }
   return [...DEFAULT_PERMISSIONS_BY_ROLE[role]]
-}
-
-export function buildUserResource(
-  existing: Record<string, unknown> | null | undefined,
-  role: UserRole,
-  permissions: string[]
-): Record<string, unknown> {
-  return {
-    ...(existing ?? {}),
-    role,
-    permissions,
-  }
 }
 
 export function initialsFromName(name: string): string {

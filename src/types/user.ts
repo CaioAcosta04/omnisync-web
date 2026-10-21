@@ -15,7 +15,6 @@ export type UserUpdateRequest = {
   email?: string
   resource?: Record<string, unknown>
   role?: string
-  permissions?: string[]
 }
 
 export type RegisterUserRequest = {
@@ -23,5 +22,14 @@ export type RegisterUserRequest = {
   name: string
   email: string
   password: string
+  role: string
   resource?: Record<string, unknown>
+}
+
+export type RoleDefinitionDto = {
+  code: 'ADMIN' | 'MANAGER' | 'SELLER' | 'VIEWER'
+  label: string
+  description: string
+  permissions: string[]
+  limitations: string[]
 }

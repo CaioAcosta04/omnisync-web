@@ -61,7 +61,7 @@ const AUTH_SCREENS: Record<UserAuthScreenLabel, ComponentType> = {
 const ROLE_SCREEN_ACCESS: Record<UserRole, readonly AppScreenLabel[]> = {
   admin: ['Painel', 'Estoque', 'Vendas', 'Marketplaces', 'Atividade', 'Anúncios', 'Usuários', 'Configurações'],
   manager: ['Painel', 'Estoque', 'Vendas', 'Marketplaces', 'Atividade', 'Anúncios', 'Configurações'],
-  editor: ['Painel', 'Estoque', 'Vendas', 'Atividade', 'Anúncios', 'Configurações'],
+  seller: ['Painel', 'Estoque', 'Vendas', 'Atividade', 'Anúncios', 'Configurações'],
   viewer: ['Painel', 'Estoque', 'Vendas', 'Atividade', 'Configurações'],
 }
 

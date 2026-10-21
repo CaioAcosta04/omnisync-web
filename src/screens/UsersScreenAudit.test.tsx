@@ -6,6 +6,7 @@ import type { AuditPageDto } from '../types/audit'
 
 const mocks = vi.hoisted(() => ({
   listUsers: vi.fn(),
+  listRoleDefinitions: vi.fn(),
   listAuditLogs: vi.fn(),
   authUser: {
     id: 1,
@@ -30,6 +31,7 @@ vi.mock('../contexts/AuthContext', () => ({
 
 vi.mock('../services/usersApi', () => ({
   listUsers: mocks.listUsers,
+  listRoleDefinitions: mocks.listRoleDefinitions,
   registerUser: vi.fn(),
   updateUser: vi.fn(),
   updateUserStatus: vi.fn(),
@@ -92,6 +94,10 @@ describe('Aba de Auditoria em UsersScreen', () => {
         createdAt: '2026-09-02T00:00:00',
         resource: { role: 'editor' },
       },
+    ])
+    mocks.listRoleDefinitions.mockResolvedValue([
+      { code: 'ADMIN', label: 'Administrador', description: 'Acesso total', permissions: ['USER_MANAGE'], limitations: ['Sem limitações'] },
+      { code: 'SELLER', label: 'Vendedor', description: 'Opera vendas', permissions: ['SALE_WRITE'], limitations: ['Não gerencia usuários'] },
     ])
     mocks.listAuditLogs.mockResolvedValue(sampleAuditResponse)
   })

@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { FiCheck, FiLock, FiMail, FiShield, FiUser, FiX } from 'react-icons/fi'
-
-type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
+import type { RoleDefinitionDto } from '../types/user'
+import type { UserRole } from '../lib/userResource'
 
 export type NewUserData = {
   name: string
   email: string
   password: string
   role: UserRole
-  permissions: string[]
 }
 
 type CreateUserModalProps = {
@@ -17,42 +16,23 @@ type CreateUserModalProps = {
   onSubmit: (data: NewUserData) => void
   submitting?: boolean
   error?: string | null
+  roleDefinitions: RoleDefinitionDto[]
 }
 
 type FieldError = Partial<Record<'name' | 'email' | 'password', string>>
 
-const ROLES: { id: UserRole; label: string; description: string }[] = [
-  { id: 'admin', label: 'Administrador', description: 'Acesso total à plataforma, incluindo faturamento e usuários' },
-  { id: 'manager', label: 'Gerente', description: 'Gerencia estoque, anúncios, vendas e marketplaces' },
-  { id: 'editor', label: 'Editor', description: 'Cria e edita anúncios e entradas de estoque' },
-  { id: 'viewer', label: 'Visualizador', description: 'Acesso somente leitura a todos os dados' },
-]
-
 const ROLE_COLORS: Record<UserRole, { bg: string; color: string; border: string }> = {
   admin: { bg: '#ede9fe', color: '#6d28d9', border: '#c4b5fd' },
   manager: { bg: '#dbeafe', color: '#2563eb', border: '#93c5fd' },
-  editor: { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
+  seller: { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
   viewer: { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' },
 }
-
-const ALL_PERMISSIONS = [
-  'Acesso total',
-  'Gestão de usuários',
-  'Faturamento',
-  'Gestão de estoque',
-  'Anúncios',
-  'Vendas',
-  'Marketplaces',
-  'Atividade',
-  'Somente leitura',
-]
 
 const INITIAL_FORM: NewUserData = {
   name: '',
   email: '',
   password: '',
   role: 'viewer',
-  permissions: ['Somente leitura'],
 }
 
 function validate(form: NewUserData): FieldError {
@@ -72,6 +52,7 @@ export function CreateUserModal({
   onSubmit,
   submitting = false,
   error = null,
+  roleDefinitions,
 }: CreateUserModalProps) {
   const [form, setForm] = useState<NewUserData>({ ...INITIAL_FORM })
   const [errors, setErrors] = useState<FieldError>({})
@@ -92,15 +73,6 @@ export function CreateUserModal({
     setTouched((prev) => new Set(prev).add(key))
     const newErrors = validate(form)
     setErrors((prev) => ({ ...prev, [key]: newErrors[key as keyof FieldError] }))
-  }
-
-  const togglePermission = (perm: string) => {
-    setForm((prev) => ({
-      ...prev,
-      permissions: prev.permissions.includes(perm)
-        ? prev.permissions.filter((p) => p !== perm)
-        : [...prev.permissions, perm],
-    }))
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -202,19 +174,20 @@ export function CreateUserModal({
               <span style={styles.sectionTitle}>Função</span>
             </div>
             <div style={styles.rolesGrid}>
-              {ROLES.map((r) => {
-                const isSelected = form.role === r.id
-                const colors = ROLE_COLORS[r.id]
+              {roleDefinitions.map((definition) => {
+                const role = definition.code.toLowerCase() as UserRole
+                const isSelected = form.role === role
+                const colors = ROLE_COLORS[role]
                 return (
                   <button
-                    key={r.id}
+                    key={definition.code}
                     type="button"
                     style={{
                       ...styles.roleCard,
                       borderColor: isSelected ? colors.border : '#e5e7eb',
                       backgroundColor: isSelected ? colors.bg : '#ffffff',
                     }}
-                    onClick={() => set('role', r.id)}
+                    onClick={() => set('role', role)}
                   >
                     <div style={styles.roleCardTop}>
                       <span
@@ -224,7 +197,7 @@ export function CreateUserModal({
                           color: colors.color,
                         }}
                       >
-                        {r.label}
+                        {definition.label} ({definition.code})
                       </span>
                       {isSelected && (
                         <span style={{ ...styles.checkCircle, backgroundColor: colors.color }}>
@@ -232,38 +205,16 @@ export function CreateUserModal({
                         </span>
                       )}
                     </div>
-                    <span style={styles.roleDesc}>{r.description}</span>
+                    <span style={styles.roleDesc}>{definition.description}</span>
+                    <span style={styles.roleLimitations}>{definition.limitations.join(' • ')}</span>
                   </button>
                 )
               })}
             </div>
           </div>
 
-          {/* Permissions */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <FiShield size={16} color="#6b7280" />
-              <span style={styles.sectionTitle}>Permissões</span>
-            </div>
-            <div style={styles.permGrid}>
-              {ALL_PERMISSIONS.map((perm) => {
-                const checked = form.permissions.includes(perm)
-                return (
-                  <label key={perm} style={styles.permItem}>
-                    <div
-                      style={{
-                        ...styles.checkbox,
-                        ...(checked ? styles.checkboxChecked : {}),
-                      }}
-                      onClick={() => togglePermission(perm)}
-                    >
-                      {checked && <FiCheck size={12} color="#fff" />}
-                    </div>
-                    <span style={styles.permLabel}>{perm}</span>
-                  </label>
-                )
-              })}
-            </div>
+          <div style={styles.autoPermissionInfo}>
+            As permissões são atribuídas automaticamente conforme o perfil selecionado.
           </div>
 
           {error && (
@@ -279,8 +230,8 @@ export function CreateUserModal({
             </button>
             <button
               type="submit"
-              style={{ ...styles.submitBtn, ...(submitting ? styles.submitBtnDisabled : {}) }}
-              disabled={submitting}
+              style={{ ...styles.submitBtn, ...(submitting || roleDefinitions.length === 0 ? styles.submitBtnDisabled : {}) }}
+              disabled={submitting || roleDefinitions.length === 0}
             >
               {submitting ? 'Criando…' : 'Criar usuário'}
             </button>
@@ -451,42 +402,19 @@ const styles = {
     color: '#6b7280',
     lineHeight: 1.4,
   },
+  roleLimitations: {
+    fontSize: '11px',
+    color: '#9ca3af',
+    lineHeight: 1.4,
+  },
 
-  /* Permissions */
-  permGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '8px',
-  },
-  permItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '10px 12px',
-    borderRadius: '8px',
-    backgroundColor: '#f9fafb',
-    cursor: 'pointer',
-  },
-  checkbox: {
-    width: '20px',
-    height: '20px',
-    borderRadius: '6px',
-    border: '2px solid #d1d5db',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    transition: 'background-color 0.15s, border-color 0.15s',
-    cursor: 'pointer',
-  },
-  checkboxChecked: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  permLabel: {
+  autoPermissionInfo: {
+    padding: '12px 14px',
+    borderRadius: '10px',
+    backgroundColor: '#eff6ff',
+    color: '#1d4ed8',
     fontSize: '13px',
-    fontWeight: 500,
-    color: '#374151',
+    lineHeight: 1.5,
   },
 
   /* Actions */

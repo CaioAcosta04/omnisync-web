@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FiCheck, FiShield, FiUser, FiX } from 'react-icons/fi'
-
-type UserRole = 'admin' | 'manager' | 'editor' | 'viewer'
+import type { RoleDefinitionDto } from '../types/user'
+import type { UserRole } from '../lib/userResource'
 type UserStatus = 'active' | 'inactive'
 
 export type ManagedUser = {
@@ -20,33 +20,15 @@ type ManageUserModalProps = {
   onSave: (user: ManagedUser) => void
   submitting?: boolean
   error?: string | null
+  roleDefinitions: RoleDefinitionDto[]
 }
-
-const ROLES: { id: UserRole; label: string; description: string }[] = [
-  { id: 'admin', label: 'Administrador', description: 'Acesso total à plataforma, incluindo faturamento e usuários' },
-  { id: 'manager', label: 'Gerente', description: 'Gerencia estoque, anúncios, vendas e marketplaces' },
-  { id: 'editor', label: 'Editor', description: 'Cria e edita anúncios e entradas de estoque' },
-  { id: 'viewer', label: 'Visualizador', description: 'Acesso somente leitura a todos os dados' },
-]
 
 const ROLE_COLORS: Record<UserRole, { bg: string; color: string; border: string }> = {
   admin: { bg: '#ede9fe', color: '#6d28d9', border: '#c4b5fd' },
   manager: { bg: '#dbeafe', color: '#2563eb', border: '#93c5fd' },
-  editor: { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
+  seller: { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
   viewer: { bg: '#f3f4f6', color: '#374151', border: '#d1d5db' },
 }
-
-const ALL_PERMISSIONS = [
-  'Acesso total',
-  'Gestão de usuários',
-  'Faturamento',
-  'Gestão de estoque',
-  'Anúncios',
-  'Vendas',
-  'Marketplaces',
-  'Atividade',
-  'Somente leitura',
-]
 
 const AVATAR_COLORS: Record<string, string> = {
   AR: '#6d28d9',
@@ -63,6 +45,7 @@ export function ManageUserModal({
   onSave,
   submitting = false,
   error = null,
+  roleDefinitions,
 }: ManageUserModalProps) {
   if (!user) return null
   return (
@@ -73,6 +56,7 @@ export function ManageUserModal({
       onSave={onSave}
       submitting={submitting}
       error={error}
+      roleDefinitions={roleDefinitions}
     />
   )
 }
@@ -83,25 +67,20 @@ function ManageUserModalForm({
   onSave,
   submitting,
   error,
+  roleDefinitions,
 }: {
   user: ManagedUser
   onClose: () => void
   onSave: (user: ManagedUser) => void
   submitting: boolean
   error: string | null
+  roleDefinitions: RoleDefinitionDto[]
 }) {
   const [role, setRole] = useState<UserRole>(user.role)
   const [status, setStatus] = useState<UserStatus>(user.status)
-  const [permissions, setPermissions] = useState<string[]>([...user.permissions])
-
-  const togglePermission = (perm: string) => {
-    setPermissions((prev) =>
-      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
-    )
-  }
 
   const handleSave = () => {
-    onSave({ ...user, role, status, permissions })
+    onSave({ ...user, role, status })
   }
 
   const avatarColor = AVATAR_COLORS[user.avatar] ?? '#6b7280'
@@ -113,7 +92,7 @@ function ManageUserModalForm({
         <div style={styles.header}>
           <div>
             <h2 style={styles.title}>Gerenciar usuário</h2>
-            <p style={styles.subtitle}>Atualize função, status e permissões</p>
+            <p style={styles.subtitle}>Atualize o perfil fixo e o status do usuário</p>
           </div>
           <button type="button" style={styles.closeBtn} onClick={onClose} aria-label="Fechar">
             <FiX size={20} />
@@ -136,19 +115,20 @@ function ManageUserModalForm({
             <span style={styles.sectionTitle}>Função</span>
           </div>
           <div style={styles.rolesGrid}>
-            {ROLES.map((r) => {
-              const isSelected = role === r.id
-              const colors = ROLE_COLORS[r.id]
+            {roleDefinitions.map((definition) => {
+              const roleOption = definition.code.toLowerCase() as UserRole
+              const isSelected = role === roleOption
+              const colors = ROLE_COLORS[roleOption]
               return (
                 <button
-                  key={r.id}
+                  key={definition.code}
                   type="button"
                   style={{
                     ...styles.roleCard,
                     borderColor: isSelected ? colors.border : '#e5e7eb',
                     backgroundColor: isSelected ? colors.bg : '#ffffff',
                   }}
-                  onClick={() => setRole(r.id)}
+                  onClick={() => setRole(roleOption)}
                 >
                   <div style={styles.roleCardTop}>
                     <span
@@ -158,7 +138,7 @@ function ManageUserModalForm({
                         color: colors.color,
                       }}
                     >
-                      {r.label}
+                      {definition.label} ({definition.code})
                     </span>
                     {isSelected && (
                       <span style={{ ...styles.checkCircle, backgroundColor: colors.color }}>
@@ -166,7 +146,8 @@ function ManageUserModalForm({
                       </span>
                     )}
                   </div>
-                  <span style={styles.roleDesc}>{r.description}</span>
+                  <span style={styles.roleDesc}>{definition.description}</span>
+                  <span style={styles.roleLimitations}>{definition.limitations.join(' • ')}</span>
                 </button>
               )
             })}
@@ -205,30 +186,8 @@ function ManageUserModalForm({
           </div>
         </div>
 
-        {/* Permissions */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <FiShield size={16} color="#6b7280" />
-            <span style={styles.sectionTitle}>Permissões</span>
-          </div>
-          <div style={styles.permGrid}>
-            {ALL_PERMISSIONS.map((perm) => {
-              const checked = permissions.includes(perm)
-              return (
-                <label key={perm} style={styles.permItem} onClick={() => togglePermission(perm)}>
-                  <div
-                    style={{
-                      ...styles.checkbox,
-                      ...(checked ? styles.checkboxChecked : {}),
-                    }}
-                  >
-                    {checked && <FiCheck size={12} color="#fff" />}
-                  </div>
-                  <span style={styles.permLabel}>{perm}</span>
-                </label>
-              )
-            })}
-          </div>
+        <div style={styles.autoPermissionInfo}>
+          As permissões são substituídas automaticamente pelas definições do perfil selecionado.
         </div>
 
         {error && (
@@ -244,9 +203,9 @@ function ManageUserModalForm({
           </button>
           <button
             type="button"
-            style={{ ...styles.saveBtn, ...(submitting ? styles.saveBtnDisabled : {}) }}
+            style={{ ...styles.saveBtn, ...(submitting || roleDefinitions.length === 0 ? styles.saveBtnDisabled : {}) }}
             onClick={handleSave}
-            disabled={submitting}
+            disabled={submitting || roleDefinitions.length === 0}
           >
             {submitting ? 'Salvando…' : 'Salvar alterações'}
           </button>
@@ -405,6 +364,11 @@ const styles = {
     color: '#6b7280',
     lineHeight: 1.4,
   },
+  roleLimitations: {
+    fontSize: '11px',
+    color: '#9ca3af',
+    lineHeight: 1.4,
+  },
 
   /* Status */
   statusRow: {
@@ -442,40 +406,13 @@ const styles = {
     borderRadius: '50%',
   },
 
-  /* Permissions */
-  permGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '8px',
-  },
-  permItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '10px 12px',
-    borderRadius: '8px',
-    backgroundColor: '#f9fafb',
-    cursor: 'pointer',
-  },
-  checkbox: {
-    width: '20px',
-    height: '20px',
-    borderRadius: '6px',
-    border: '2px solid #d1d5db',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    transition: 'background-color 0.15s, border-color 0.15s',
-  },
-  checkboxChecked: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  permLabel: {
+  autoPermissionInfo: {
+    padding: '12px 14px',
+    borderRadius: '10px',
+    backgroundColor: '#eff6ff',
+    color: '#1d4ed8',
     fontSize: '13px',
-    fontWeight: 500,
-    color: '#374151',
+    lineHeight: 1.5,
   },
 
   /* Actions */

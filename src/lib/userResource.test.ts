@@ -7,18 +7,19 @@ import {
   type UserRole,
 } from './userResource'
 
-describe('permissões individuais do usuário', () => {
-  it.each<UserRole>(['admin', 'manager', 'editor', 'viewer'])('preserva permissões revogadas de %s', (role) => {
+describe('perfis fixos de usuário', () => {
+  it.each<UserRole>(['admin', 'manager', 'seller', 'viewer'])('lê as permissões retornadas para %s', (role) => {
     expect(parseUserPermissions({ role, permissions: [] }, role)).toEqual([])
   })
 
   it('preserva a seleção explícita sem completar com permissões do papel', () => {
-    expect(parseUserPermissions({ role: 'editor', permissions: ['Vendas'] }, 'editor')).toEqual(['Vendas'])
+    expect(parseUserPermissions({ role: 'seller', permissions: ['SALE_READ'] }, 'seller')).toEqual(['SALE_READ'])
   })
 
   it('usa os padrões somente quando a configuração está ausente', () => {
     expect(parseUserPermissions({}, 'viewer')).toEqual(['Somente leitura'])
-    expect(parseUserRole({ role: 'SELLER' })).toBe('editor')
+    expect(parseUserRole({ role: 'SELLER' })).toBe('seller')
+    expect(parseUserRole({ role: 'editor' })).toBe('seller')
   })
 
   it('identifica PRODUCT_READ e não confunde permissões de venda com leitura de estoque', () => {

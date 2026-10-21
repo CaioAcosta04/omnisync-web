@@ -1,6 +1,12 @@
 import { throwApiError } from '../lib/apiError'
 import { apiFetch } from '../lib/apiFetch'
-import type { RegisterUserRequest, UserDto, UserUpdateRequest } from '../types/user'
+import type { RegisterUserRequest, RoleDefinitionDto, UserDto, UserUpdateRequest } from '../types/user'
+
+export async function listRoleDefinitions(): Promise<RoleDefinitionDto[]> {
+  const res = await apiFetch('/api/roles')
+  if (!res.ok) await throwApiError(res, 'Não foi possível carregar os perfis de acesso.')
+  return (await res.json()) as RoleDefinitionDto[]
+}
 
 export async function listUsers(): Promise<UserDto[]> {
   const res = await apiFetch('/api/users')

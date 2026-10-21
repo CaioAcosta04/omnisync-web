@@ -22,7 +22,6 @@ import { AdminPasswordReset } from '../components/AdminPasswordReset'
 import { useAuth } from '../contexts/AuthContext'
 import { formatRelative } from '../lib/relativeTime'
 import {
-  buildUserResource,
   formatPermissionLabel,
   hasAuditReadPermission,
   initialsFromName,
@@ -32,13 +31,14 @@ import {
 } from '../lib/userResource'
 import {
   listUsers,
+  listRoleDefinitions,
   registerUser,
   updateUser,
   updateUserStatus,
 } from '../services/usersApi'
 import { listAuditLogs } from '../services/auditApi'
 import { AuditDetailModal } from '../components/AuditDetailModal'
-import type { UserDto } from '../types/user'
+import type { RoleDefinitionDto, UserDto } from '../types/user'
 import type { AuditAction, AuditEntityType, AuditLogDto } from '../types/audit'
 
 type UserStatus = 'active' | 'inactive'
@@ -58,7 +58,7 @@ type PlatformUser = {
 const ROLE_CONFIG: Record<UserRole, { label: string; bg: string; color: string }> = {
   admin: { label: 'Administrador', bg: '#ede9fe', color: '#6d28d9' },
   manager: { label: 'Gerente', bg: '#dbeafe', color: '#2563eb' },
-  editor: { label: 'Editor', bg: '#fef3c7', color: '#92400e' },
+  seller: { label: 'Vendedor', bg: '#fef3c7', color: '#92400e' },
   viewer: { label: 'Visualizador', bg: '#f3f4f6', color: '#374151' },
 }
 
@@ -80,7 +80,7 @@ function toPlatformUser(dto: UserDto): PlatformUser {
     role,
     status: dto.active ? 'active' : 'inactive',
     lastActive: formatRelative(dto.createdAt),
-    permissions: parseUserPermissions(dto.resource, role),
+    permissions: dto.permissions ?? parseUserPermissions(dto.resource, role),
     avatar: initialsFromName(dto.name),
     resource: dto.resource,
   }
@@ -130,6 +130,7 @@ export function UsersScreen() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [roleDefinitions, setRoleDefinitions] = useState<RoleDefinitionDto[]>([])
 
   // ── Audit state ──
   const [auditLogs, setAuditLogs] = useState<AuditLogDto[]>([])
@@ -214,6 +215,12 @@ export function UsersScreen() {
     void fetchUsers()
   }, [fetchUsers])
 
+  useEffect(() => {
+    listRoleDefinitions()
+      .then(setRoleDefinitions)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Erro ao carregar perfis de acesso.'))
+  }, [])
+
   const handleSaveUser = useCallback(
     async (updated: ManagedUser) => {
       const existing = users.find((u) => u.id === updated.id)
@@ -223,8 +230,7 @@ export function UsersScreen() {
       setSaveError(null)
       try {
         await updateUser(Number(updated.id), {
-          role: updated.role,
-          permissions: updated.permissions,
+          role: updated.role.toUpperCase(),
         })
         if ((updated.status === 'active') !== (existing.status === 'active')) {
           await updateUserStatus(Number(updated.id), updated.status === 'active')
@@ -251,7 +257,7 @@ export function UsersScreen() {
           name: data.name.trim(),
           email: data.email.trim(),
           password: data.password,
-          resource: buildUserResource(null, data.role, data.permissions),
+          role: data.role.toUpperCase(),
         })
         setShowCreateModal(false)
         setCreateError(null)
@@ -486,7 +492,7 @@ export function UsersScreen() {
 
       {/* Role filter tabs */}
       <div style={styles.filters}>
-        {(['all', 'admin', 'manager', 'editor', 'viewer'] as const).map((role) => (
+        {(['all', 'admin', 'manager', 'seller', 'viewer'] as const).map((role) => (
           <button
             key={role}
             type="button"
@@ -995,6 +1001,7 @@ export function UsersScreen() {
 
       <ManageUserModal
         user={managingUser}
+        roleDefinitions={roleDefinitions}
         onClose={() => {
           setManagingUser(null)
           setSaveError(null)
@@ -1006,6 +1013,7 @@ export function UsersScreen() {
 
       <CreateUserModal
         open={showCreateModal}
+        roleDefinitions={roleDefinitions}
         onClose={() => {
           setShowCreateModal(false)
           setCreateError(null)
