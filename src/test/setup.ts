@@ -23,7 +23,9 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => {
   cleanup()
   server.resetHandlers()
-  window.localStorage.clear()
+  if (typeof window !== 'undefined') {
+    window.localStorage.clear()
+  }
 })
 
 afterAll(() => server.close())

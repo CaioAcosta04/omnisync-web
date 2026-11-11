@@ -3,7 +3,16 @@ import type { ProductDto } from '../types/product'
 const URL_REGEX = /^https?:\/\/.+/
 const MAX_PICTURES = 10
 const MAX_FILE_BYTES = 5 * 1024 * 1024
-const ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+
+type ImageFormat = {
+  contentType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+  extension: 'jpg' | 'png' | 'webp' | 'gif'
+}
+
+const JPEG_FORMAT: ImageFormat = { contentType: 'image/jpeg', extension: 'jpg' }
+const PNG_FORMAT: ImageFormat = { contentType: 'image/png', extension: 'png' }
+const WEBP_FORMAT: ImageFormat = { contentType: 'image/webp', extension: 'webp' }
+const GIF_FORMAT: ImageFormat = { contentType: 'image/gif', extension: 'gif' }
 
 /** Requisito do Mercado Livre: mínimo 500 px em um dos lados (após processamento). */
 export const ML_MIN_IMAGE_SIDE_PX = 500
@@ -44,16 +53,113 @@ export function pictureFromUrl(url: string): ProductPictureEntry | null {
   }
 }
 
+function detectImageFormatFromBytes(bytes: Uint8Array): ImageFormat | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return JPEG_FORMAT
+  }
+
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return PNG_FORMAT
+  }
+
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return WEBP_FORMAT
+  }
+
+  if (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x38 &&
+    (bytes[4] === 0x37 || bytes[4] === 0x39) &&
+    bytes[5] === 0x61
+  ) {
+    return GIF_FORMAT
+  }
+
+  return null
+}
+
+function formatFromContentType(contentType: string | undefined): ImageFormat | null {
+  switch (contentType?.toLowerCase()) {
+    case 'image/jpeg':
+    case 'image/jpg':
+      return JPEG_FORMAT
+    case 'image/png':
+      return PNG_FORMAT
+    case 'image/webp':
+      return WEBP_FORMAT
+    case 'image/gif':
+      return GIF_FORMAT
+    default:
+      return null
+  }
+}
+
+function extractBase64Payload(value: string): string {
+  const commaIndex = value.indexOf(',')
+  return value.startsWith('data:') && commaIndex >= 0 ? value.slice(commaIndex + 1) : value
+}
+
+function detectImageFormatFromBase64(value: string): ImageFormat | null {
+  const prefix = extractBase64Payload(value).replace(/\s/g, '').slice(0, 32)
+  if (!prefix) return null
+
+  try {
+    const decoded = atob(prefix.padEnd(Math.ceil(prefix.length / 4) * 4, '='))
+    return detectImageFormatFromBytes(
+      Uint8Array.from(decoded, (character) => character.charCodeAt(0))
+    )
+  } catch {
+    return null
+  }
+}
+
+function normalizeImageFileName(fileName: string | undefined, format: ImageFormat): string {
+  const fallbackName = 'imagem-produto'
+  const trimmed = fileName?.trim()
+  const nameWithoutExtension = trimmed?.replace(/\.[^./\\]+$/, '')
+  const baseName = nameWithoutExtension || fallbackName
+  return `${baseName}.${format.extension}`
+}
+
+function normalizeDataUri(value: string, format: ImageFormat): string {
+  return `data:${format.contentType};base64,${extractBase64Payload(value.trim())}`
+}
+
 function pictureFromDataUri(dataUri: string, fileName?: string): ProductPictureEntry {
   const trimmed = dataUri.trim()
   const match = /^data:([^;]+);base64,/i.exec(trimmed)
-  const contentType = match?.[1] ?? 'image/jpeg'
+  const format = detectImageFormatFromBase64(trimmed)
+    ?? formatFromContentType(match?.[1])
+    ?? JPEG_FORMAT
   return {
     id: crypto.randomUUID(),
-    previewUrl: trimmed,
-    base64: trimmed,
-    contentType,
-    fileName: fileName ?? 'imagem-produto.jpg',
+    previewUrl: normalizeDataUri(trimmed, format),
+    base64: normalizeDataUri(trimmed, format),
+    contentType: format.contentType,
+    fileName: normalizeImageFileName(fileName, format),
   }
 }
 
@@ -76,26 +182,28 @@ export function pictureFromStoredImage(img: Record<string, unknown>): ProductPic
 
   const rawBase64 = typeof img.base64 === 'string' ? img.base64.trim() : ''
   if (rawBase64) {
-    const contentType =
+    const declaredContentType =
       typeof img.content_type === 'string'
         ? img.content_type
         : typeof img.contentType === 'string'
           ? img.contentType
           : 'image/jpeg'
-    const previewUrl = rawBase64.startsWith('data:')
-      ? rawBase64
-      : `data:${contentType};base64,${rawBase64}`
+    const format = detectImageFormatFromBase64(rawBase64)
+      ?? formatFromContentType(declaredContentType)
+      ?? JPEG_FORMAT
+    const previewUrl = normalizeDataUri(rawBase64, format)
+    const fileName =
+      typeof img.file_name === 'string'
+        ? img.file_name
+        : typeof img.fileName === 'string'
+          ? img.fileName
+          : undefined
     return {
       id: crypto.randomUUID(),
       previewUrl,
       base64: previewUrl,
-      contentType,
-      fileName:
-        typeof img.file_name === 'string'
-          ? img.file_name
-          : typeof img.fileName === 'string'
-            ? img.fileName
-            : 'imagem-produto.jpg',
+      contentType: format.contentType,
+      fileName: normalizeImageFileName(fileName, format),
     }
   }
 
@@ -146,22 +254,26 @@ async function assertImageMeetsMlRequirements(src: string, label: string): Promi
 }
 
 export async function pictureFromFile(file: File): Promise<ProductPictureEntry> {
-  if (!ACCEPTED_TYPES.has(file.type)) {
-    throw new Error('Formato não suportado. Use JPEG, PNG, WebP ou GIF.')
-  }
   if (file.size > MAX_FILE_BYTES) {
     throw new Error('Imagem muito grande. Máximo 5 MB por arquivo.')
   }
 
-  const dataUri = await readFileAsDataUrl(file)
+  const header = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+  const format = detectImageFormatFromBytes(header)
+  if (!format) {
+    throw new Error('Formato não suportado. Use JPEG, PNG, WebP ou GIF.')
+  }
+
+  const normalizedImage = new Blob([file], { type: format.contentType })
+  const dataUri = await readFileAsDataUrl(normalizedImage)
   await assertImageMeetsMlRequirements(dataUri, file.name)
 
   return {
     id: crypto.randomUUID(),
     previewUrl: dataUri,
     base64: dataUri,
-    contentType: file.type,
-    fileName: file.name,
+    contentType: format.contentType,
+    fileName: normalizeImageFileName(file.name, format),
   }
 }
 
@@ -175,7 +287,7 @@ export async function validatePictureUrlDimensions(url: string): Promise<string 
   }
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
+function readFileAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
