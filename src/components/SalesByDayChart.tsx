@@ -6,7 +6,8 @@ const NUM = new Intl.NumberFormat('pt-BR')
 const NUM_COMPACT = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })
 const WEEKDAY = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' })
 
-const HEIGHT = 248
+/** Altura usada antes do ResizeObserver medir o card (o gráfico cresce para preenchê-lo). */
+const DEFAULT_HEIGHT = 240
 const PAD = { top: 16, right: 14, bottom: 28, left: 50 }
 /** Acima de 12 pontos (ex.: 30 dias) os rótulos do eixo X ficam esparsos. */
 const DENSE_THRESHOLD = 12
@@ -68,25 +69,26 @@ type SalesByDayChartProps = {
 
 export function SalesByDayChart({ data }: SalesByDayChartProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null)
-  const [width, setWidth] = useState(0)
+  const [size, setSize] = useState({ width: 0, height: 0 })
   const [hover, setHover] = useState<number | null>(null)
 
   useEffect(() => {
     const el = wrapRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width
-      if (w) setWidth(w)
+      const rect = entries[0]?.contentRect
+      if (rect) setSize({ width: rect.width, height: rect.height })
     })
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
 
   const geometry = useMemo(() => {
-    const w = width || 600
+    const w = size.width || 600
+    const h = size.height || DEFAULT_HEIGHT
     const n = data.length
     const plotW = Math.max(0, w - PAD.left - PAD.right)
-    const plotH = HEIGHT - PAD.top - PAD.bottom
+    const plotH = Math.max(0, h - PAD.top - PAD.bottom)
     const rawMax = Math.max(0, ...data.map((d) => d.total))
     const max = niceMax(rawMax) || 1
     const slot = n > 0 ? plotW / n : plotW
@@ -120,10 +122,10 @@ export function SalesByDayChart({ data }: SalesByDayChartProps) {
       labelIndices = [...set]
     }
 
-    return { w, max, plotH, barWidth, radius, bars, labelIndices, dense: n > DENSE_THRESHOLD }
-  }, [data, width])
+    return { w, h, max, plotH, barWidth, radius, bars, labelIndices, dense: n > DENSE_THRESHOLD }
+  }, [data, size])
 
-  const { w, max, plotH, bars, labelIndices, dense, radius, barWidth } = geometry
+  const { w, h, max, plotH, bars, labelIndices, dense, radius, barWidth } = geometry
   const hovered = hover != null ? bars[hover] : null
 
   return (
@@ -133,8 +135,9 @@ export function SalesByDayChart({ data }: SalesByDayChartProps) {
       onMouseLeave={() => setHover(null)}
     >
       <svg
-        viewBox={`0 0 ${w} ${HEIGHT}`}
+        viewBox={`0 0 ${w} ${h}`}
         width="100%"
+        height="100%"
         style={styles.svg}
         role="img"
         aria-label="Gráfico de vendas por dia"
@@ -172,7 +175,7 @@ export function SalesByDayChart({ data }: SalesByDayChartProps) {
           const bar = bars[i]
           if (!bar) return null
           return (
-            <text key={i} x={bar.center} y={HEIGHT - 10} textAnchor="middle" style={styles.xLabel}>
+            <text key={i} x={bar.center} y={h - 10} textAnchor="middle" style={styles.xLabel}>
               {dense ? dayMonthLabel(bar.point.date) : weekdayLabel(bar.point.date)}
             </text>
           )
@@ -198,7 +201,7 @@ export function SalesByDayChart({ data }: SalesByDayChartProps) {
           style={{
             ...styles.tooltip,
             left: `${Math.min(93, Math.max(7, (hovered.center / w) * 100))}%`,
-            top: `${((PAD.top + plotH - hovered.height) / HEIGHT) * 100}%`,
+            top: `${((PAD.top + plotH - hovered.height) / h) * 100}%`,
           }}
         >
           <strong style={styles.tooltipValue}>{BRL.format(hovered.point.total)}</strong>
@@ -215,10 +218,16 @@ export function SalesByDayChart({ data }: SalesByDayChartProps) {
 const styles = {
   wrap: {
     position: 'relative' as const,
-    padding: '8px 8px 4px',
+    flex: 1,
+    minHeight: '220px',
+    boxSizing: 'border-box' as const,
   },
   svg: {
+    position: 'absolute' as const,
+    inset: 0,
     display: 'block',
+    width: '100%',
+    height: '100%',
   },
   yLabel: {
     font: '500 10px system-ui, sans-serif',
