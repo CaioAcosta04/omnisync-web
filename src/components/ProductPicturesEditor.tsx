@@ -175,6 +175,9 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '10px',
+    width: '100%',
+    minWidth: 0,
+    boxSizing: 'border-box' as const,
   },
   toolbar: {
     display: 'flex',
@@ -224,11 +227,16 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '8px',
+    width: '100%',
+    minWidth: 0,
   },
   row: {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
+    width: '100%',
+    minWidth: 0,
+    boxSizing: 'border-box' as const,
   },
   thumb: {
     width: '48px',

@@ -697,6 +697,8 @@ const styles = {
     maxWidth: '580px',
     maxHeight: '90vh',
     overflowY: 'auto' as const,
+    overflowX: 'hidden' as const,
+    boxSizing: 'border-box' as const,
     backgroundColor: '#ffffff',
     borderRadius: '16px',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
@@ -737,11 +739,17 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '20px',
+    minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box' as const,
   },
   field: {
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '6px',
+    minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box' as const,
   },
   label: {
     fontSize: '13px',
@@ -760,6 +768,9 @@ const styles = {
     border: '1px solid #e5e7eb',
     borderRadius: '10px',
     transition: 'border-color 0.15s',
+    minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box' as const,
   },
   inputWrapError: {
     borderColor: '#fca5a5',
@@ -773,6 +784,7 @@ const styles = {
     color: '#111827',
     backgroundColor: 'transparent',
     minWidth: 0,
+    width: '100%',
   },
   textareaWrap: {
     padding: '10px 14px',
@@ -780,6 +792,9 @@ const styles = {
     border: '1px solid #e5e7eb',
     borderRadius: '10px',
     transition: 'border-color 0.15s',
+    minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box' as const,
   },
   textarea: {
     width: '100%',
@@ -791,6 +806,7 @@ const styles = {
     backgroundColor: 'transparent',
     resize: 'vertical' as const,
     minHeight: '60px',
+    boxSizing: 'border-box' as const,
   },
   errorMsg: {
     fontSize: '12px',
@@ -800,11 +816,15 @@ const styles = {
   row: {
     display: 'flex',
     gap: '16px',
+    minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box' as const,
   },
 
   /* ML toggle card */
   mlToggleCard: {
     width: '100%',
+    boxSizing: 'border-box' as const,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -880,11 +900,17 @@ const styles = {
     backgroundColor: '#fffde7',
     border: '1px solid #fde68a',
     borderRadius: '10px',
+    boxSizing: 'border-box' as const,
+    width: '100%',
+    minWidth: 0,
   },
 
   /* Category autocomplete */
   autocompleteWrap: {
     position: 'relative' as const,
+    width: '100%',
+    minWidth: 0,
+    boxSizing: 'border-box' as const,
   },
   miniSpinner: {
     width: '14px',
