@@ -22,6 +22,7 @@ import { ActivityEmptyState } from '../components/ActivityEmptyState'
 import { GenerateReportModal } from '../components/GenerateReportModal'
 import { LowStockProductsModal } from '../components/LowStockProductsModal'
 import { ProductDetailDialog } from '../components/ProductDetailDialog'
+import { SalesByDayChart } from '../components/SalesByDayChart'
 import { useAppNavigation } from '../contexts/AppNavigationContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useMercadoLivreSync } from '../contexts/MercadoLivreSyncContext'
@@ -42,7 +43,6 @@ import './DashboardScreen.css'
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 const NUM = new Intl.NumberFormat('pt-BR')
 const PCT = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-const WEEKDAY = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' })
 const DAYMONTH = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' })
 
 /** Quantos eventos mostrar no painel de atividade recente. */
@@ -81,13 +81,6 @@ function formatPercent(value: number): string {
   return `${sign}${PCT.format(Math.abs(value))}%`
 }
 
-function weekdayLabel(dateStr: string): string {
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? `${dateStr}T00:00:00` : dateStr
-  const date = new Date(normalized)
-  if (Number.isNaN(date.getTime())) return dateStr
-  const label = WEEKDAY.format(date).replace('.', '')
-  return label.charAt(0).toUpperCase() + label.slice(1)
-}
 
 function dayMonthLabel(dateStr: string): string {
   const normalized = /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? `${dateStr}T00:00:00` : dateStr
@@ -288,10 +281,10 @@ export function DashboardScreen() {
     )
   }, [summary, canReadProducts])
 
-  const maxSalesValue = useMemo(() => {
-    if (!summary || summary.salesByDay.length === 0) return 0
-    return Math.max(...summary.salesByDay.map((p) => p.total))
-  }, [summary])
+  const periodTotal = useMemo(
+    () => summary?.salesByDay.reduce((sum, p) => sum + p.total, 0) ?? 0,
+    [summary],
+  )
 
   const maxInventoryQty = useMemo(() => {
     if (!analytics || analytics.inventoryByDay.length === 0) return 0
@@ -428,7 +421,12 @@ export function DashboardScreen() {
           <section className="dashboard-bottom-grid" style={styles.bottomGrid}>
             <article style={styles.salesCard} aria-label="Vendas por dia">
               <div style={styles.sectionHead}>
-                <h2 style={styles.sectionTitle}>Vendas por dia</h2>
+                <div>
+                  <h2 style={styles.sectionTitle}>Vendas por dia</h2>
+                  <p style={styles.sectionCaption}>
+                    Faturamento diário · {BRL.format(periodTotal)} no período
+                  </p>
+                </div>
                 <div style={styles.rangeToggle} role="group" aria-label="Seletor de período">
                   {RANGE_OPTIONS.map((opt) => (
                     <button
@@ -450,34 +448,7 @@ export function DashboardScreen() {
               {summary.salesByDay.length === 0 ? (
                 <div style={styles.chartEmpty} role="status">Sem vendas no período.</div>
               ) : (
-                <div className="dashboard-chart-scroll">
-                  <div
-                    className="dashboard-chart-scroll-inner"
-                    style={{
-                      ...styles.chartArea,
-                      gridTemplateColumns: `repeat(${summary.salesByDay.length}, minmax(0, 1fr))`,
-                    }}
-                  >
-                  {summary.salesByDay.map((point, index) => {
-                    const barHeight =
-                      maxSalesValue > 0 ? `${Math.max(6, (point.total / maxSalesValue) * 100)}%` : '6%'
-                    const isHighlight = maxSalesValue > 0 && point.total === maxSalesValue
-                    return (
-                      <div key={`${point.date}-${index}`} style={styles.barCol}>
-                        <div
-                          style={{
-                            ...styles.bar,
-                            height: barHeight,
-                            ...(isHighlight ? styles.barHighlight : {}),
-                          }}
-                          title={`${weekdayLabel(point.date)}: ${BRL.format(point.total)} · ${NUM.format(point.count)} venda(s)`}
-                        />
-                        <span style={styles.barLabel}>{weekdayLabel(point.date)}</span>
-                      </div>
-                    )
-                  })}
-                  </div>
-                </div>
+                <SalesByDayChart data={summary.salesByDay} />
               )}
             </article>
 
@@ -969,6 +940,11 @@ const styles = {
     fontSize: '22px',
     fontWeight: 700,
     color: '#0f172a',
+  },
+  sectionCaption: {
+    margin: '3px 0 0',
+    fontSize: '12px',
+    color: '#94a3b8',
   },
   rangeToggle: {
     display: 'flex',
